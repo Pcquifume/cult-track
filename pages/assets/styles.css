@@ -16,6 +16,8 @@
   --green: #2bd576;
   --orange: #ffb547;
   --red: #ff5c7c;
+  --pos: #2bd576;
+  --neg: #ff5c7c;
   --grad: linear-gradient(135deg, #7c5cff 0%, #00d4ff 100%);
   --radius: 18px;
   --shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
@@ -303,6 +305,41 @@ th.num { text-align: right; }
   background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 10px;
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
+
+/* -------------------------------------------------------- Nouvelles UI (v2) */
+.table-toolbar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  padding: 14px 16px; border-bottom: 1px solid var(--card-border);
+}
+.table-toolbar .input { flex: 1 1 240px; }
+.table-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+
+th[data-sort] { cursor: pointer; user-select: none; position: relative; }
+th[data-sort]:hover { color: var(--text); }
+th[data-sort].active-sort { color: var(--accent-2); }
+
+tbody tr.cre-row { cursor: pointer; }
+tbody tr.cre-row:hover { background: rgba(124, 92, 255, .09); }
+tbody tr.cre-row:active { background: rgba(124, 92, 255, .14); }
+.cre-link { color: var(--accent-2); }
+.cre-link:hover { color: var(--text); }
+
+.pill-tag { background: rgba(124, 92, 255, .12); color: #c9bfff; border-color: rgba(124, 92, 255, .3); }
+
+.modal-lg { width: min(860px, 100%); max-height: 92vh; overflow-y: auto; }
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.modal-head h3 { margin: 0; font-size: 22px; letter-spacing: -0.5px; }
+.cre-thumb-lg { width: 64px; height: 64px; border-radius: 14px; font-size: 24px; }
+.kpi-grid-detail { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.kpi { transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.kpi:hover { transform: translateY(-3px); border-color: var(--card-border-hover); box-shadow: var(--shadow); }
+.card { transition: border-color .16s ease; }
+.card:hover { border-color: rgba(255, 255, 255, .12); }
+
+.btn:focus-visible, .input:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .topbar-inner { height: auto; padding: 12px 0; flex-wrap: wrap; gap: 10px; }

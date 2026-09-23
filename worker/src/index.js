@@ -130,6 +130,25 @@ export default {
         return json(data);
       }
 
+      if (path === "/api/sales" && request.method === "GET") {
+        const sales = await ctx.store.fetchSalesAll(user.id);
+        return json({
+          status: "ok",
+          sales: sales.map((s) => ({
+            id: s.id,
+            created_at: s.created_at,
+            payed_out_at: s.payed_out_at,
+            creation_id: s.creation_id,
+            creation_name: s.creation_name,
+            buyer_nick: s.buyer_nick,
+            income_cents: s.income_cents,
+            currency: s.currency,
+            vat_cents: s.vat_cents,
+            discount_percentage: s.discount_percentage,
+          })),
+        });
+      }
+
       const createMatch = path.match(/^\/api\/creation\/([^/]+)$/);
       if (createMatch && request.method === "GET") {
         const id = decodeURIComponent(createMatch[1]);

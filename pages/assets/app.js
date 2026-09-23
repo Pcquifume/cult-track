@@ -91,6 +91,58 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(diff / 86_400_000)} j`;
 }
 
+function monthLabel(m) {
+  const [y, mo] = String(m).split("-");
+  const d = new Date(Number(y), Number(mo) - 1, 1);
+  return d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+}
+
+// Regroupe la série de revenus jour par jour par mois.
+function monthlySeries(revenue) {
+  const map = new Map();
+  for (const r of revenue || []) {
+    if (!r || !r.date) continue;
+    const m = r.date.slice(0, 7);
+    const b = map.get(m) || { m, label: monthLabel(m), cents: 0, count: 0 };
+    b.cents += r.cents || 0;
+    b.count += r.count || 0;
+    map.set(m, b);
+  }
+  return [...map.values()].sort((a, b) => a.m.localeCompare(b.m));
+}
+
+// Croissance du dernier mois vs mois précédent (revenus).
+function monthlyGrowth(months) {
+  if (!months.length) return null;
+  const cur = months[months.length - 1];
+  const prev = months[months.length - 2];
+  if (!prev) return { label: cur.label, delta: null, cents: cur.cents };
+  const delta = prev.cents > 0 ? (cur.cents - prev.cents) / prev.cents : (cur.cents > 0 ? 1 : 0);
+  return { label: cur.label, prevLabel: prev.label, delta, cents: cur.cents };
+}
+
+function downloadCsv(filename, rows) {
+  const csv = rows
+    .map((r) =>
+      r
+        .map((cell) => {
+          const s = String(cell == null ? "" : cell);
+          return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        })
+        .join(";")
+    )
+    .join("\r\n") + "\r\n";
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
 /* ==========================================================================
    API
    ========================================================================== */
@@ -459,6 +511,11 @@ function renderDashboardShell(d) {
           <p class="card-sub">Nombre de ventes enregistrées chaque jour</p>
           <div class="chart" id="chart-sales"></div>
         </div>
+        <div class="card span-2">
+          <p class="card-title">Revenus par mois</p>
+          <p class="card-sub">Total encaissé chaque mois</p>
+          <div class="chart tall" id="chart-month"></div>
+        </div>
       </div>
 
       <div class="section-title">Audience &amp; engagement</div>
@@ -482,17 +539,24 @@ function renderDashboardShell(d) {
 
       <div class="section-title">Vos créations</div>
       <div class="card">
+        <div class="table-toolbar">
+          <input class="input" id="table-search" type="search" placeholder="🔍 Rechercher : nom, tag, visibilité…" autocomplete="off" />
+          <div class="table-btns">
+            <button class="btn btn-ghost" id="btn-export-sales" title="Exporter toutes les ventes en CSV">⬇ Ventes CSV</button>
+            <button class="btn btn-ghost" id="btn-export-creations" title="Exporter les créations en CSV">⬇ Créations CSV</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table id="creations-table">
             <thead>
               <tr>
                 <th>Création</th>
                 <th>Prix</th>
-                <th class="num">Vues</th>
-                <th class="num">Likes</th>
-                <th class="num">Téléch.</th>
-                <th class="num">Ventes</th>
-                <th class="num">Revenus</th>
+                <th class="num" data-sort="views" title="Trier par vues">Vues ⇅</th>
+                <th class="num" data-sort="likes" title="Trier par likes">Likes ⇅</th>
+                <th class="num" data-sort="downloads" title="Trier par téléchargements">Téléch. ⇅</th>
+                <th class="num" data-sort="salesCount" title="Trier par ventes">Ventes ⇅</th>
+                <th class="num" data-sort="revenueCents" title="Trier par revenus">Revenus ⇅</th>
                 <th>Courbe</th>
               </tr>
             </thead>
@@ -548,14 +612,28 @@ function renderDashboardShell(d) {
 
 function renderKpis(d) {
   const t = d.totals;
+  const months = monthlySeries(d.revenue);
+  const best = months.slice().sort((a, b) => b.cents - a.cents)[0];
+  const growth = monthlyGrowth(months);
   const items = [
-    { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} conversion` },
+    { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
     { label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
     { label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
     { label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
     { label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
     { label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
   ];
+  if (best) {
+    items.push({ label: "Meilleur mois", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
+  }
+  if (growth && growth.delta != null) {
+    const up = growth.delta >= 0;
+    items.push({
+      label: `Croissance · ${esc(growth.label)}`,
+      value: `<span style="color:${up ? "var(--pos)" : "var(--neg)"}">${up ? "▲" : "▼"} ${pct(Math.abs(growth.delta))}</span>`,
+      foot: `vs ${esc(growth.prevLabel)}`,
+    });
+  }
   $("#kpis").innerHTML = items
     .map(
       (i) => `
@@ -569,8 +647,10 @@ function renderKpis(d) {
 }
 
 /* ==========================================================================
-   Table des créations
+   Table des créations (tri, recherche, détail, export CSV)
    ========================================================================== */
+const tableUI = { data: [], q: "", sort: "revenueCents", dir: -1, all: false };
+
 function sparkline(points, key = "views") {
   if (!points || points.length < 2) {
     return `<span style="color:var(--muted-2);font-size:12px">—</span>`;
@@ -598,31 +678,52 @@ function sparkline(points, key = "views") {
 }
 
 function renderTable(d) {
-  const rows = [...d.creations].sort((a, b) => b.revenueCents - a.revenueCents || b.views - a.views);
-  const visible = rows.slice(0, 25);
+  tableUI.data = d.creations || [];
+  refreshTable(d);
+}
+
+function refreshTable(d) {
+  d = d || state.data;
   const tbody = $("#creations-table tbody");
   const actions = $("#table-actions");
+  if (!tbody) return;
+
+  const q = tableUI.q.trim().toLowerCase();
+  const rows = [...tableUI.data]
+    .filter((c) => {
+      if (!q) return true;
+      const hay = [c.name, c.visibility, c.priceCents ? "payant" : "gratuit", ...(c.tags || [])].join(" ").toLowerCase();
+      return hay.indexOf(q) !== -1;
+    })
+    .sort((a, b) => {
+      const ka = a[tableUI.sort];
+      const kb = b[tableUI.sort];
+      const va = typeof ka === "number" ? ka : 0;
+      const vb = typeof kb === "number" ? kb : 0;
+      return (va - vb) * tableUI.dir;
+    });
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>Aucune création</strong>
-      Publiez des modèles 3D, puis lancez une synchronisation.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>${q ? "Aucune correspondance" : "Aucune création"}</strong>
+      ${q ? "Aucune création ne correspond à votre recherche." : "Publiez des modèles 3D, puis lancez une synchronisation."}</div></td></tr>`;
     actions.innerHTML = "";
     return;
   }
 
+  const visible = tableUI.all ? rows : rows.slice(0, 25);
   tbody.innerHTML = visible
     .map((c) => {
       const isPaid = c.priceCents > 0;
       return `
-      <tr>
+      <tr class="cre-row" data-id="${esc(c.id)}" title="Cliquer pour voir l'évolution">
         <td>
           <div class="cre-item">
             ${c.imageUrl
               ? `<img class="cre-thumb" src="${esc(c.imageUrl)}" loading="lazy" alt="" onerror="this.style.display='none'" />`
               : `<div class="cre-thumb cre-thumb-ph">⬡</div>`}
             <div>
-              <div class="cre-name">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>` : esc(c.name)}</div>
-              <div class="cre-meta">${esc(fmtDate(c.publishedAt))}</div>
+              <div class="cre-name">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener" class="cre-link" onclick="event.stopPropagation()">${esc(c.name)}</a>` : esc(c.name)}</div>
+              <div class="cre-meta">${esc(fmtDate(c.publishedAt))} · ${esc(c.visibility || "inconnu")}</div>
             </div>
           </div>
         </td>
@@ -639,8 +740,167 @@ function renderTable(d) {
 
   actions.innerHTML = `
     <span style="font-size:13px;color:var(--muted)">
-      ${visible.length} / ${rows.length} création(s) · triées par revenus
-    </span>`;
+      ${visible.length} / ${rows.length} création(s) · triées par ${tableUI.sort === "revenueCents" ? "revenus" : tableUI.sort}
+      ${q ? ` · filtre « ${esc(tableUI.q)} »` : ""}
+    </span>
+    ${rows.length > 25 ? `<button class="btn btn-ghost" id="btn-show-all">${tableUI.all ? "Réduire" : `Afficher les ${rows.length}`}</button>` : ""}`;
+
+  const showAll = $("#btn-show-all");
+  if (showAll) showAll.addEventListener("click", () => { tableUI.all = !tableUI.all; refreshTable(); });
+}
+
+function bindTableInteractions(d) {
+  const search = $("#table-search");
+  if (search) search.addEventListener("input", (e) => { tableUI.q = e.target.value; refreshTable(); });
+
+  $$("#creations-table th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (tableUI.sort === key) tableUI.dir = -tableUI.dir;
+      else { tableUI.sort = key; tableUI.dir = -1; }
+      refreshTable();
+    });
+  });
+
+  const tbody = $("#creations-table tbody");
+  if (tbody) tbody.addEventListener("click", (e) => {
+    if (e.target.closest("a.cre-link")) return;
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) openCreationDetail(tr.getAttribute("data-id"));
+  });
+
+  const expSales = $("#btn-export-sales");
+  if (expSales) expSales.addEventListener("click", exportSalesCsv);
+
+  const expCreations = $("#btn-export-creations");
+  if (expCreations) expCreations.addEventListener("click", exportCreationsCsv);
+}
+
+function exportCreationsCsv() {
+  const rows = [["Nom", "URL", "Prix", "Vues", "Likes", "Téléchargements", "Ventes", "Revenus", "Visibilité", "Publiée", "Tags"]];
+  for (const c of tableUI.data) {
+    rows.push([
+      c.name,
+      c.url,
+      c.priceCents > 0 ? (c.priceCents / 100).toFixed(2) + " " + c.currency : "Gratuit",
+      c.views,
+      c.likes,
+      c.downloads,
+      c.salesCount,
+      ((c.revenueCents || 0) / 100).toFixed(2),
+      c.visibility,
+      c.publishedAt ? fmtDate(c.publishedAt, false) : "",
+      (c.tags || []).join(", "),
+    ]);
+  }
+  downloadCsv("créations.csv", rows);
+}
+
+async function exportSalesCsv() {
+  try {
+    const r = await api("/api/sales");
+    const sales = (r && r.sales) || [];
+    const rows = [["Date", "Création", "Acheteur", "Revenu", "Devise", "TVA", "Remise"]];
+    for (const s of sales) {
+      rows.push([
+        s.created_at ? fmtDateTime(s.created_at) : "",
+        s.creation_name || s.creation_id || "",
+        s.buyer_nick || "",
+        ((s.income_cents || 0) / 100).toFixed(2),
+        s.currency || "EUR",
+        ((s.vat_cents || 0) / 100).toFixed(2),
+        s.discount_percentage != null ? s.discount_percentage + "%" : "",
+      ]);
+    }
+    downloadCsv("ventes.csv", rows);
+  } catch (e) {
+    alert("Export impossible : " + e.message);
+  }
+}
+
+/* ==========================================================================
+   Détail d'une création (courbe d'évolution)
+   ========================================================================== */
+let detailChart = null;
+let detailOverlay = null;
+
+async function openCreationDetail(id) {
+  const src = (tableUI.data || []).find((c) => String(c.id) === String(id));
+  if (!src) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.id = "detail-overlay";
+  overlay.innerHTML = `
+    <div class="card modal modal-lg">
+      <div class="modal-head">
+        <div style="display:flex;align-items:center;gap:12px;min-width:0">
+          ${src.imageUrl
+            ? `<img class="cre-thumb cre-thumb-lg" src="${esc(src.imageUrl)}" alt="" onerror="this.style.display='none'" />`
+            : `<div class="cre-thumb cre-thumb-lg cre-thumb-ph">⬡</div>`}
+          <div style="min-width:0">
+            <h3 style="word-break:break-word">${esc(src.name)}</h3>
+            <div class="cre-meta">
+              ${src.url ? `<a class="cre-link" href="${esc(src.url)}" target="_blank" rel="noopener">Voir sur Cults3D ↗</a>` : ""}
+              ${src.publishedAt ? ` · publiée le ${esc(fmtDate(src.publishedAt, false))}` : ""}
+              ${src.visibility ? ` · <span class="pill ${src.priceCents > 0 ? "pill-paid" : "pill-free"}">${src.priceCents > 0 ? esc(money(src.priceCents, src.currency)) : "Gratuit"}</span>` : ""}
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="detail-close" title="Fermer">✕</button>
+      </div>
+
+      <div class="kpi-grid kpi-grid-detail">
+        <div class="card kpi"><div class="kpi-label">Vues</div><div class="kpi-value"><span class="accent">${num(src.views)}</span></div><div class="kpi-foot">${(Number(src.salesCount) && Number(src.views)) ? "conversion : " + pct((src.salesCount || 0) / src.views) : ""}</div></div>
+        <div class="card kpi"><div class="kpi-label">Téléchargements</div><div class="kpi-value"><span class="accent">${num(src.downloads)}</span></div><div class="kpi-foot">&nbsp;</div></div>
+        <div class="card kpi"><div class="kpi-label">Likes</div><div class="kpi-value"><span class="accent">${num(src.likes)}</span></div><div class="kpi-foot">&nbsp;</div></div>
+        <div class="card kpi"><div class="kpi-label">Ventes</div><div class="kpi-value"><span class="accent">${num(src.salesCount)}</span></div><div class="kpi-foot">${money(src.revenueCents, src.currency, true)}</div></div>
+      </div>
+
+      <div id="detail-chart" class="chart tall" style="min-height:280px"></div>
+
+      <div id="detail-tags" class="tags" style="margin-top:14px"></div>
+
+      <div class="note" style="margin-top:14px">💡 Les courbes se construisent avec vos synchronisations successives.</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  detailOverlay = overlay;
+
+  const close = () => { try { if (detailChart) detailChart.dispose(); } catch { /* ignore */ } detailChart = null; overlay.remove(); detailOverlay = null; };
+  $("#detail-close", overlay).addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  if ((src.tags || []).length) {
+    $("#detail-tags", overlay).innerHTML = (src.tags || []).map((t) => `<span class="pill pill-tag">${esc(t)}</span>`).join(" ");
+  }
+
+  try {
+    const r = await api("/api/creation/" + encodeURIComponent(src.id));
+    const pts = (r && r.points) || [];
+    if (pts.length >= 2 && window.echarts) {
+      const el = $("#detail-chart", overlay);
+      detailChart = window.echarts.init(el, null, { renderer: "canvas" });
+      const opt = baseOption();
+      const labels = pts.map((p) => fmtDate(p.captured_at));
+      opt.xAxis.data = labels;
+      opt.legend.data = ["Vues", "Likes", "Téléchargements", "Revenus"];
+      opt.yAxis = [
+        { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } }, axisLabel: { color: "#8a91ad", formatter: (v) => num(v) } },
+        { type: "value", splitLine: { show: false }, axisLabel: { color: "#8a91ad", formatter: (v) => money(v, src.currency, true) } },
+      ];
+      opt.series = [
+        { name: "Vues", type: "line", smooth: true, symbol: "circle", symbolSize: 7, data: pts.map((p) => p.views || 0), lineStyle: { width: 3, color: "#7c5cff" }, itemStyle: { color: "#7c5cff" } },
+        { name: "Téléchargements", type: "line", smooth: true, symbol: "circle", symbolSize: 7, data: pts.map((p) => p.downloads || 0), lineStyle: { width: 3, color: "#00d4ff" }, itemStyle: { color: "#00d4ff" } },
+        { name: "Likes", type: "line", smooth: true, symbol: "circle", symbolSize: 7, data: pts.map((p) => p.likes || 0), lineStyle: { width: 3, color: "#2bd576" }, itemStyle: { color: "#2bd576" } },
+        { name: "Revenus", type: "bar", yAxisIndex: 1, data: pts.map((p) => p.sales_amount_cents || 0), itemStyle: { color: "rgba(124,92,255,.5)", borderRadius: [5, 5, 0, 0] }, barMaxWidth: 22 },
+      ];
+      detailChart.setOption(opt);
+    } else {
+      $("#detail-chart", overlay).innerHTML = `<div class="empty"><span><strong>Pas encore assez de points</strong>Relancez la synchronisation plusieurs fois pour construire la courbe.</span></div>`;
+    }
+  } catch (err) {
+    $("#detail-chart", overlay).innerHTML = `<div class="empty"><span><strong>Détail indisponible</strong>${esc(err.message)}</span></div>`;
+  }
 }
 
 /* ==========================================================================
@@ -653,6 +913,8 @@ function destroyCharts() {
     try { charts[k].dispose(); } catch { /* ignore */ }
     delete charts[k];
   });
+  if (detailChart) { try { detailChart.dispose(); } catch { /* ignore */ } detailChart = null; }
+  if (detailOverlay) { try { detailOverlay.remove(); } catch { /* ignore */ } detailOverlay = null; }
 }
 
 function makeChart(id) {
@@ -776,6 +1038,45 @@ function drawCharts(d) {
       },
     ];
     const c = makeChart("chart-sales");
+    if (c) c.setOption(opt);
+  }
+
+  /* --- Revenus par mois ---------------------------------------------------- */
+  const months = monthlySeries(d.revenue);
+  if (!months.length) {
+    emptyChart("chart-month", "Aucune vente pour l'instant", "Les barres mensuelles apparaîtront dès vos premières ventes.");
+  } else {
+    const opt = baseOption();
+    opt.grid = { left: 70, right: 26, top: 20, bottom: 34 };
+    opt.tooltip.trigger = "axis";
+    opt.tooltip.formatter = (ps) => {
+      const p = ps[0];
+      const item = months[p.dataIndex];
+      return `<strong>${esc(item.label)}</strong><br/>Revenus : ${money(item.cents, d.user.currency)}<br/>Ventes : ${item.count}`;
+    };
+    opt.xAxis.data = months.map((m) => m.label);
+    opt.yAxis = {
+      type: "value",
+      splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
+      axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
+    };
+    opt.series = [
+      {
+        name: "Revenus",
+        type: "bar",
+        data: months.map((m) => m.cents),
+        itemStyle: { color: "#ffb547", borderRadius: [5, 5, 0, 0] },
+        barMaxWidth: 34,
+        label: {
+          show: true,
+          position: "top",
+          color: "#8a91ad",
+          fontSize: 11,
+          formatter: (p) => money(p.value, d.user.currency, true),
+        },
+      },
+    ];
+    const c = makeChart("chart-month");
     if (c) c.setOption(opt);
   }
 
@@ -1055,6 +1356,7 @@ async function loadDashboard() {
   renderDashboardShell(d);
   renderKpis(d);
   renderTable(d);
+  bindTableInteractions(d);
   drawCharts(d);
 }
 
