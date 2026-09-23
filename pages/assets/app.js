@@ -324,23 +324,23 @@ function renderLogin(msg = null, error = null) {
           <div class="field">
             <label for="apiKey">Votre clé API secrète</label>
             <input class="input mono" id="apiKey" name="apiKey" type="password" required
-                   placeholder="Même clé que dans relay.config.json" />
+                   placeholder="Votre clé API Cults3D" />
           </div>
           <button class="btn btn-primary btn-lg" id="login-btn" type="submit">Se connecter &amp; synchroniser</button>
         </form>
 
-        <div class="hint" style="margin-top:16px">
-          <strong>Prérequis : le relais local</strong><br />
-          Prérequis : Cults3D bloque les appels venus du cloud. Le relais local
-          <code>relay/server.mjs</code> (Node) appelle l'API depuis votre machine :
-          créez <code>relay/relay.config.json</code> avec votre <code>nick</code> et clé API,
-          puis lancez <code>npm start</code> dans <code>relay/</code>.
-        </div>
+<div class="hint" style="margin-top:16px">
+            Cults3D bloque les appels venus du cloud et du navigateur (403/CORS).
+            Le site passe par le <strong>relais central</strong> (Render, gratuit) :
+            aucune installation chez vous. Sur le plan gratuit, le relais se met en
+            veille — le premier appel (connexion ou 1<sup>re</sup> synchro) peut
+            donc prendre une minute.
+          </div>
 
-        <p class="login-links" style="margin-top:16px">
-          🔒 La clé API reste dans <code>relay.config.json</code> sur votre machine.
-          Elle est aussi conservée chiffrée (AES-256-GCM) dans Supabase.
-        </p>
+          <p class="login-links" style="margin-top:16px">
+            🔒 Votre clé voyage chiffrée (HTTPS) navigateur → relais → Cults3D, et est
+            conservée chiffrée (AES-256-GCM) dans Supabase.
+          </p>
       </div>
     </div>`;
 
