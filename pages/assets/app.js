@@ -28,6 +28,92 @@ const state = {
 const charts = {};
 
 /* ==========================================================================
+   Thèmes (Premium · Minimal · Clair) & icônes SVG
+   ========================================================================== */
+const THEMES = {
+  premium: { name: "Premium", desc: "Sombre, profond, accent bleu" },
+  minimal: { name: "Minimal", desc: "Épuré, fort contraste" },
+  light: { name: "Clair", desc: "Lumineux et professionnel" },
+};
+
+const SVG = (body) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+
+const ICONS = {
+  refresh: SVG(`<path d="M20 11.5A8 8 0 1 0 18.4 17"/><path d="M20 4.5v6.8h-6.8"/>`),
+  key: SVG(`<path d="m21 2-9.4 9.4"/><circle cx="7.5" cy="15.5" r="4.5"/><path d="m15 8 2.5 2.5"/>`),
+  power: SVG(`<path d="M12 3.5V12"/><path d="M6 6.6a8 8 0 1 0 12 0"/>`),
+  theme: SVG(`<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5c0-.6-.6-1-1.2-.8a5.6 5.6 0 0 1-6.4-6.4c.2-.6-.2-1.2-.9-1.3Z"/>`),
+  euro: SVG(`<circle cx="12" cy="12" r="9"/><path d="M15.2 9.6c-.7-1-1.8-1.5-3.1-1.5-2 0-3.5 1.3-3.5 3.9s1.5 3.9 3.5 3.9c1.3 0 2.4-.5 3.1-1.5"/><path d="M8.5 10.5h5M8.5 13.5h5"/>`),
+  cart: SVG(`<circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17.5" cy="19.5" r="1.4"/><path d="M3 4h2l2.7 11.2a1 1 0 0 0 1 .8h8.1a1 1 0 0 0 1-.8L20 8H6"/>`),
+  download: SVG(`<path d="M12 3v9.5"/><path d="m8 8.5 4 4 4-4"/><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17"/>`),
+  eye: SVG(`<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>`),
+  heart: SVG(`<path d="M12 20s-6.8-4.3-9-8.7C1.3 7.6 3.6 4 7.1 4c1.9 0 3.4 1.1 4.1 2.4C12 5.1 13.5 4 15.4 4c3.5 0 5.8 3.6 4.1 7.3C17.3 15.7 12 20 12 20z"/>`),
+  users: SVG(`<circle cx="9" cy="8" r="3.4"/><path d="M2.5 20c.6-3.3 3.2-5 6.5-5s5.9 1.7 6.5 5"/><path d="M15.5 4.8a3.4 3.4 0 0 1 0 6.4"/><path d="M18.5 15.3c1.7.7 2.7 2 3 4.7"/>`),
+  grid: SVG(`<rect x="3" y="3" width="7.2" height="7.2" rx="1.5"/><rect x="13.8" y="3" width="7.2" height="7.2" rx="1.5"/><rect x="3" y="13.8" width="7.2" height="7.2" rx="1.5"/><rect x="13.8" y="13.8" width="7.2" height="7.2" rx="1.5"/>`),
+  trophy: SVG(`<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 5H4.5A2.5 2.5 0 0 0 7 8.2M17 5h2.5A2.5 2.5 0 0 1 17 8.2"/><path d="M12 13v4"/><path d="M8.5 20h7"/>`),
+  up: SVG(`<path d="M3 17l5.5-5.5L12 15l8.5-8.5"/><path d="M15 6.5h5.5V12"/>`),
+  down: SVG(`<path d="M3 7l5.5 5.5L12 9l8.5 8.5"/><path d="M15 17.5h5.5V12"/>`),
+};
+
+const PREVIEW_HTML = (key) => `
+  <div class="theme-preview${document.documentElement.dataset.theme === key ? " active" : ""}" data-preview="${key}" role="button" tabindex="0" aria-label="Thème ${esc(THEMES[key].name)}">
+    <div class="tp-top"><span class="tp-dot"></span><span class="tp-dot"></span><span class="tp-dot"></span><span class="tp-pill"></span></div>
+    <div class="tp-card">
+      <div class="tp-kpis">
+        <div class="tp-kpi"><i class="tp-bar big"></i></div>
+        <div class="tp-kpi"><i class="tp-bar"></i></div>
+        <div class="tp-kpi"><i class="tp-bar"></i></div>
+      </div>
+      <div class="tp-rows"><i class="tp-row"></i><i class="tp-row"></i></div>
+    </div>
+    <span class="tp-name">${esc(THEMES[key].name)}</span>
+    <span class="tp-desc">${esc(THEMES[key].desc)}</span>
+  </div>`;
+
+function applyTheme(t) {
+  if (!THEMES[t]) t = "premium";
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("culttrack_theme", t); } catch { /* ignore */ }
+  $$(".theme-preview").forEach((el) => el.classList.toggle("active", el.getAttribute("data-preview") === t));
+  if (state.data) { try { drawCharts(state.data); } catch { /* ignore */ } }
+}
+
+function bindThemePreviews() {
+  $$(".theme-preview").forEach((el) => {
+    const key = el.getAttribute("data-preview");
+    el.addEventListener("click", () => applyTheme(key));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applyTheme(key); }
+    });
+  });
+}
+
+// Couleurs adaptatives pour les graphiques ECharts selon le thème actif.
+function chartTheme() {
+  const t = document.documentElement.dataset.theme;
+  if (t === "light") {
+    return {
+      grid: "rgba(20,24,34,.09)", axis: "rgba(20,24,34,.2)", label: "#6b7487",
+      tipBg: "rgba(255,255,255,.98)", tipBorder: "rgba(20,24,34,.14)", tipText: "#1c2434",
+      donutBg: "#ffffff", donutLabel: "#3a4354", donutLine: "#b9c2d0",
+    };
+  }
+  if (t === "minimal") {
+    return {
+      grid: "rgba(255,255,255,.07)", axis: "rgba(255,255,255,.16)", label: "#8a8a96",
+      tipBg: "rgba(28,28,32,.97)", tipBorder: "rgba(255,255,255,.16)", tipText: "#f2f2f6",
+      donutBg: "#131315", donutLabel: "#e6e6ea", donutLine: "#64646e",
+    };
+  }
+  return {
+    grid: "rgba(255,255,255,.07)", axis: "rgba(255,255,255,.15)", label: "#8a93ab",
+    tipBg: "rgba(21,25,42,.97)", tipBorder: "rgba(255,255,255,.15)", tipText: "#eef1f8",
+    donutBg: "#121522", donutLabel: "#e6eaf4", donutLine: "#5f6790",
+  };
+}
+
+/* ==========================================================================
    Helpers
    ========================================================================== */
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -383,6 +469,29 @@ const cultsPause = (ms) => new Promise((r) => setTimeout(r, ms));
 /* ==========================================================================
    Vues
    ========================================================================== */
+/* ==========================================================================
+   Vues
+   ========================================================================== */
+function openThemePrefs() {
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.innerHTML = `
+    <div class="card modal">
+      <div class="modal-head">
+        <div>
+          <h3>Apparence</h3>
+          <p>Choisissez l'ambiance du tableau de bord. Modifiable à tout moment.</p>
+        </div>
+        <button class="btn btn-ghost" id="theme-close" aria-label="Fermer">✕</button>
+      </div>
+      <div class="theme-grid">${Object.keys(THEMES).map(PREVIEW_HTML).join("")}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  bindThemePreviews();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  $("#theme-close", overlay).addEventListener("click", () => overlay.remove());
+}
+
 function renderLogin(msg = null, error = null) {
   destroyCharts();
   $("#app").innerHTML = `
@@ -411,7 +520,12 @@ function renderLogin(msg = null, error = null) {
           <button class="btn btn-primary btn-lg" id="login-btn" type="submit">Se connecter &amp; synchroniser</button>
         </form>
 
-<div class="hint" style="margin-top:16px">
+        <div class="theme-picker">
+          <label>Apparence</label>
+          <div class="theme-grid">${Object.keys(THEMES).map(PREVIEW_HTML).join("")}</div>
+        </div>
+
+        <div class="hint" style="margin-top:16px">
             Cults3D bloque les appels venus du cloud et du navigateur (403/CORS).
             Le site passe par le <strong>relais central</strong> (Render, gratuit) :
             aucune installation chez vous. Sur le plan gratuit, le relais se met en
@@ -427,6 +541,7 @@ function renderLogin(msg = null, error = null) {
     </div>`;
 
   $("#login-form").addEventListener("submit", onLogin);
+  bindThemePreviews();
   $("#apiKey").focus();
 }
 
@@ -504,9 +619,10 @@ function renderDashboardShell(d) {
         <div class="logo"><div class="logo-mark">◈</div>cult<span>track</span></div>
         <div class="topbar-actions">
           <span class="sync-badge"><span class="dot ${statusClass}"></span> Sync : ${esc(timeAgo(last && last.finished_at))}</span>
-          <button class="btn btn-primary" id="btn-sync" title="Relancer la synchronisation">⟳ Actualiser</button>
-          <button class="btn btn-ghost" id="btn-rekey" title="Changer de clé API">🔑</button>
-          <button class="btn btn-ghost" id="btn-logout" title="Déconnexion">⏻</button>
+          <button class="btn btn-primary" id="btn-sync" title="Relancer la synchronisation">${ICONS.refresh} Actualiser</button>
+          <button class="btn btn-ghost" id="btn-theme" title="Changer d'apparence">${ICONS.theme} <span>Thème</span></button>
+          <button class="btn btn-ghost" id="btn-rekey" title="Changer de clé API" aria-label="Changer de clé API">${ICONS.key}</button>
+          <button class="btn btn-ghost" id="btn-logout" title="Déconnexion" aria-label="Déconnexion">${ICONS.power}</button>
         </div>
       </div>
     </header>
@@ -644,6 +760,7 @@ function renderDashboardShell(d) {
       toast("Synchronisation impossible : " + err.message, "error");
     }
   });
+  $("#btn-theme").addEventListener("click", openThemePrefs);
   $("#btn-logout").addEventListener("click", () => {
     clearSession();
     renderLogin("Session fermée. Vous pouvez vous reconnecter.");
@@ -673,20 +790,21 @@ function renderKpis(d) {
   const best = months.slice().sort((a, b) => b.cents - a.cents)[0];
   const growth = monthlyGrowth(months);
   const items = [
-    { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
-    { label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
-    { label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
-    { label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
-    { label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
-    { label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
-    { label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
+    { icon: "euro", label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
+    { icon: "cart", label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
+    { icon: "download", label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
+    { icon: "eye", label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
+    { icon: "heart", label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
+    { icon: "users", label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
+    { icon: "grid", label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
   ];
   if (best) {
-    items.push({ label: "Meilleur mois", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
+    items.push({ icon: "trophy", label: "Meilleur mois", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
   }
   if (growth && growth.delta != null) {
     const up = growth.delta >= 0;
     items.push({
+      icon: up ? "up" : "down",
       label: `Croissance · ${esc(growth.label)}`,
       value: `<span style="color:${up ? "var(--pos)" : "var(--neg)"}">${up ? "▲" : "▼"} ${pct(Math.abs(growth.delta))}</span>`,
       foot: `vs ${esc(growth.prevLabel)}`,
@@ -696,7 +814,10 @@ function renderKpis(d) {
     .map(
       (i) => `
       <div class="card kpi">
-        <div class="kpi-label">${esc(i.label)}</div>
+        <div class="kpi-head">
+          <span class="kpi-label">${esc(i.label)}</span>
+          <span class="kpi-icon" aria-hidden="true">${ICONS[i.icon]}</span>
+        </div>
         <div class="kpi-value"><span class="accent">${i.value}</span></div>
         <div class="kpi-foot">${esc(i.foot || "")}</div>
       </div>`
@@ -985,6 +1106,7 @@ let detailChart = null;
 let detailOverlay = null;
 
 async function openCreationDetail(id) {
+  const cx = chartTheme();
   const src = (tableUI.data || []).find((c) => String(c.id) === String(id));
   if (!src) return;
 
@@ -1046,8 +1168,8 @@ async function openCreationDetail(id) {
       opt.xAxis.data = labels;
       opt.legend.data = ["Vues", "Likes", "Téléchargements", "Revenus"];
       opt.yAxis = [
-        { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } }, axisLabel: { color: "#8a91ad", formatter: (v) => num(v) } },
-        { type: "value", splitLine: { show: false }, axisLabel: { color: "#8a91ad", formatter: (v) => money(v, src.currency, true) } },
+        { type: "value", splitLine: { lineStyle: { color: cx.grid } }, axisLabel: { color: cx.label, formatter: (v) => num(v) } },
+        { type: "value", splitLine: { show: false }, axisLabel: { color: cx.label, formatter: (v) => money(v, src.currency, true) } },
       ];
       opt.series = [
         { name: "Vues", type: "line", smooth: true, symbol: "circle", symbolSize: 7, data: pts.map((p) => p.views || 0), lineStyle: { width: 3, color: "#7c5cff" }, itemStyle: { color: "#7c5cff" } },
@@ -1092,29 +1214,30 @@ function makeChart(id) {
 }
 
 function baseOption() {
+  const cx = chartTheme();
   return {
     backgroundColor: "transparent",
     color: PALETTE,
     tooltip: {
       trigger: "axis",
-      backgroundColor: "rgba(16,18,34,.96)",
-      borderColor: "rgba(255,255,255,.12)",
-      textStyle: { color: "#e7eaf6", fontSize: 13 },
-      axisPointer: { type: "line", lineStyle: { color: "rgba(124,92,255,.5)" } },
+      backgroundColor: cx.tipBg,
+      borderColor: cx.tipBorder,
+      textStyle: { color: cx.tipText, fontSize: 13 },
+      axisPointer: { type: "line", lineStyle: { color: cx.axis } },
     },
     grid: { left: 66, right: 26, top: 44, bottom: 46 },
-    legend: { textStyle: { color: "#8a91ad", fontSize: 12.5 }, top: 6, icon: "roundRect", itemWidth: 14, itemHeight: 8 },
-    textStyle: { color: "#8a91ad", fontFamily: "inherit" },
+    legend: { textStyle: { color: cx.label, fontSize: 12.5 }, top: 6, icon: "roundRect", itemWidth: 14, itemHeight: 8 },
+    textStyle: { color: cx.label, fontFamily: "inherit" },
     xAxis: {
       type: "category",
-      axisLine: { lineStyle: { color: "rgba(255,255,255,.14)" } },
-      axisLabel: { color: "#8a91ad", fontSize: 12 },
+      axisLine: { lineStyle: { color: cx.axis } },
+      axisLabel: { color: cx.label, fontSize: 12 },
       axisTick: { show: false },
     },
     yAxis: {
       type: "value",
-      splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
-      axisLabel: { color: "#8a91ad", fontSize: 12 },
+      splitLine: { lineStyle: { color: cx.grid } },
+      axisLabel: { color: cx.label, fontSize: 12 },
     },
   };
 }
@@ -1127,6 +1250,7 @@ function emptyChart(id, title, sub) {
 
 function drawCharts(d) {
   destroyCharts();
+  const cx = chartTheme();
 
   /* --- Revenus cumulés (barres journalières + courbe cumulée) ------------- */
   const rev = d.revenue || [];
@@ -1144,13 +1268,13 @@ function drawCharts(d) {
     opt.yAxis = [
       {
         type: "value",
-        splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
-        axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
+        splitLine: { lineStyle: { color: cx.grid } },
+        axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
       },
       {
         type: "value",
         splitLine: { show: false },
-        axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
+        axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
       },
     ];
     opt.series = [
@@ -1218,8 +1342,8 @@ function drawCharts(d) {
     opt.xAxis.data = months.map((m) => m.label);
     opt.yAxis = {
       type: "value",
-      splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
-      axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
+      splitLine: { lineStyle: { color: cx.grid } },
+      axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
     };
     opt.series = [
       {
@@ -1231,7 +1355,7 @@ function drawCharts(d) {
         label: {
           show: true,
           position: "top",
-          color: "#8a91ad",
+          color: cx.label,
           fontSize: 11,
           formatter: (p) => money(p.value, d.user.currency, true),
         },
@@ -1258,13 +1382,13 @@ function drawCharts(d) {
     opt.yAxis = [
       {
         type: "value",
-        splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
-        axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => num(v) },
+        splitLine: { lineStyle: { color: cx.grid } },
+        axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => num(v) },
       },
       {
         type: "value",
         splitLine: { show: false },
-        axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => num(v) },
+        axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => num(v) },
       },
     ];
     const mk = (name, key, axis, color) => ({
@@ -1300,8 +1424,8 @@ function drawCharts(d) {
           ...baseOption(),
           grid: { left: 150, right: 40, top: 20, bottom: 30 },
           tooltip: { ...baseOption().tooltip, formatter: (p) => `${esc(p[0].name)}<br/>Vues : ${p[0].value}` },
-          xAxis: { type: "value", splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } }, axisLabel: { color: "#8a91ad" } },
-          yAxis: { type: "category", data: names, axisLabel: { color: "#8a91ad", fontSize: 12 }, axisLine: { lineStyle: { color: "rgba(255,255,255,.14)" } } },
+          xAxis: { type: "value", splitLine: { lineStyle: { color: cx.grid } }, axisLabel: { color: cx.label } },
+          yAxis: { type: "category", data: names, axisLabel: { color: cx.label, fontSize: 12 }, axisLine: { lineStyle: { color: cx.axis } } },
           series: [{ type: "bar", data: (d.topCreations || []).slice(0, 8).map((t) => t.views), itemStyle: { color: "#7c5cff", borderRadius: [0, 5, 5, 0] }, barMaxWidth: 18 }],
         });
       }
@@ -1318,14 +1442,14 @@ function drawCharts(d) {
     };
     opt.xAxis = {
       type: "value",
-      splitLine: { lineStyle: { color: "rgba(255,255,255,.06)" } },
-      axisLabel: { color: "#8a91ad", fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
+      splitLine: { lineStyle: { color: cx.grid } },
+      axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
     };
     opt.yAxis = {
       type: "category",
       data: top.map((t) => t.name.length > 24 ? t.name.slice(0, 23) + "…" : t.name),
-      axisLabel: { color: "#8a91ad", fontSize: 12.5 },
-      axisLine: { lineStyle: { color: "rgba(255,255,255,.14)" } },
+      axisLabel: { color: cx.label, fontSize: 12.5 },
+      axisLine: { lineStyle: { color: cx.axis } },
       inverse: true,
     };
     opt.series = [
@@ -1338,7 +1462,7 @@ function drawCharts(d) {
         label: {
           show: true,
           position: "right",
-          color: "#8a91ad",
+          color: cx.label,
           fontSize: 11.5,
           formatter: (p) => money(p.value, d.user.currency, true),
         },
@@ -1352,7 +1476,7 @@ function drawCharts(d) {
   const ps = d.priceShare || { free: { count: 0 }, paid: { count: 0 } };
   const opt = baseOption();
   opt.tooltip.trigger = "item";
-  opt.legend = { bottom: 6, textStyle: { color: "#8a91ad", fontSize: 12.5 } };
+  opt.legend = { bottom: 6, textStyle: { color: cx.label, fontSize: 12.5 } };
   opt.series = [
     {
       name: "Catalogue",
@@ -1360,9 +1484,9 @@ function drawCharts(d) {
       radius: ["52%", "76%"],
       center: ["50%", "46%"],
       avoidLabelOverlap: true,
-      itemStyle: { borderColor: "#0b0d19", borderWidth: 3, borderRadius: 6 },
-      label: { show: true, color: "#e7eaf6", fontSize: 13, formatter: "{b}\n{c} ({d}%)" },
-      labelLine: { lineStyle: { color: "#5e6480" } },
+      itemStyle: { borderColor: cx.donutBg, borderWidth: 3, borderRadius: 6 },
+      label: { show: true, color: cx.tipText, fontSize: 13, formatter: "{b}\n{c} ({d}%)" },
+      labelLine: { lineStyle: { color: cx.donutLine } },
       data: [
         { name: "Gratuits", value: ps.free.count, itemStyle: { color: "#00d4ff" } },
         { name: "Payants", value: ps.paid.count, itemStyle: { color: "#ffb547" } },
@@ -1555,6 +1679,9 @@ let booted = false;
 function start() {
   if (booted) return;
   booted = true;
+  let saved = null;
+  try { saved = localStorage.getItem("culttrack_theme"); } catch { /* ignore */ }
+  applyTheme(saved || "premium");
   boot();
 }
 document.addEventListener("DOMContentLoaded", start);
