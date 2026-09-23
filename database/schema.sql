@@ -164,3 +164,11 @@ create table if not exists sync_runs (
 
 create index if not exists sync_runs_user_finished_idx
   on sync_runs(user_id, finished_at desc nulls last);
+
+-- ---------------------------------------------------------------------------
+-- Migrations idempotentes (rejouables) : vues/likes/téléchargements courants
+-- stockés directement sur chaque création pour des totaux fiables.
+-- ---------------------------------------------------------------------------
+alter table creations add column if not exists views integer not null default 0;
+alter table creations add column if not exists likes integer not null default 0;
+alter table creations add column if not exists downloads integer not null default 0;

@@ -53,9 +53,9 @@ export async function buildDashboard(store, user) {
   }
 
   const revenueCents = sales.reduce((s, x) => s + (x.income_cents || 0), 0);
-  const totalViews = Object.values(latest).reduce((s, h) => s + (h.views || 0), 0);
-  const totalLikes = Object.values(latest).reduce((s, h) => s + (h.likes || 0), 0);
-  const totalDownloads = Object.values(latest).reduce((s, h) => s + (h.downloads || 0), 0);
+  const totalViews = creations.reduce((s, c) => s + (Number(c.views) || 0), 0);
+  const totalLikes = creations.reduce((s, c) => s + (Number(c.likes) || 0), 0);
+  const totalDownloads = creations.reduce((s, c) => s + (Number(c.downloads) || 0), 0);
 
   // ----- Séries jour par jour (revenus) -------------------------------------
   const byDay = new Map();
@@ -105,9 +105,9 @@ export async function buildDashboard(store, user) {
       currency: c.currency || "EUR",
       visibility: c.visibility || null,
       publishedAt: c.published_at || null,
-      views: (latest[c.id] && latest[c.id].views) || 0,
-      likes: (latest[c.id] && latest[c.id].likes) || 0,
-      downloads: (latest[c.id] && latest[c.id].downloads) || 0,
+      views: Number(c.views) || 0,
+      likes: Number(c.likes) || 0,
+      downloads: Number(c.downloads) || 0,
       revenueCents: revenueByCreation.get(c.id) || 0,
       salesCount: salesCountByCreation.get(c.id) || 0,
       tags: parseTags(c.tags),

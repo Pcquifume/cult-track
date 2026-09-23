@@ -52,6 +52,9 @@ function normalizeCreation(raw, user) {
     made_with_ai: typeof raw.madeWithAi === "boolean" ? raw.madeWithAi : null,
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     sales_total_cents: centsOf(raw.totalSalesAmount),
+    views: raw.viewsCount || 0,
+    likes: raw.likesCount || 0,
+    downloads: raw.downloadsCount || 0,
     // champs utilisés pour l'historique
     _views: raw.viewsCount || 0,
     _likes: raw.likesCount || 0,
@@ -332,15 +335,10 @@ async function finalizeSync(user, store, { newSales = 0, rate = null } = {}) {
   const salesCount = sales.length;
   const revenueCents = sales.reduce((s, x) => s + (x.income_cents || 0), 0);
 
-  // Dernière valeur connue de chaque création à partir de son historique.
-  const lastHistory = await store.fetchHistoryAll(user.id);
-  const latest = {};
-  for (const h of lastHistory) {
-    latest[h.creation_id] = h; // ordre croissant → écrase avec la plus récente
-  }
-  const totalViews = Object.values(latest).reduce((s, h) => s + (h.views || 0), 0);
-  const totalLikes = Object.values(latest).reduce((s, h) => s + (h.likes || 0), 0);
-  const totalDownloads = Object.values(latest).reduce((s, h) => s + (h.downloads || 0), 0);
+  // Valeurs courantes (stockées sur chaque création à chaque sync).
+  const totalViews = creations.reduce((s, c) => s + (Number(c.views) || 0), 0);
+  const totalLikes = creations.reduce((s, c) => s + (Number(c.likes) || 0), 0);
+  const totalDownloads = creations.reduce((s, c) => s + (Number(c.downloads) || 0), 0);
 
   const freshUser = (await store.getUserById(user.id)) || user;
   const due = await store.snapshotDue(user.id, SNAPSHOT_MIN_INTERVAL_MS);
@@ -378,21 +376,21 @@ async function finalizeSync(user, store, { newSales = 0, rate = null } = {}) {
 // bloqué par la protection anti-bot) puis envoie ici les résultats bruts.
 // Ce mode remplace la sync Worker → Cults3D quand celui-ci reçoit un HTTP 403.
 // --------------------------------------------------------------------------
-export async function ingestBatch(user, store, { stage, items, done }) {
+export async function ingestBatch(user, store, { stage, items, done, profile } = {}) {
   items = Array.isArray(items) ? items : [];
 
   if (stage === "creations") {
-    const normalized = items.map((raw) => normalizeCreation(raw, user));
-    const profileSource = normalized[0];
-    if (profileSource) {
+    // Profil (abonnés / avatar / bio) renvoyé par le front depuis `myself.user`.
+    if (profile && typeof profile === "object") {
       const patchData = {};
-      if (profileSource._followers != null) patchData.followers = profileSource._followers;
-      if (profileSource._avatar) patchData.avatar_url = profileSource._avatar;
-      if (profileSource._bio) patchData.bio = profileSource._bio;
-      if (profileSource._shortUrl) patchData.profile_url = profileSource._shortUrl;
+      if (typeof profile.followersCount === "number") patchData.followers = profile.followersCount;
+      if (profile.imageUrl) patchData.avatar_url = profile.imageUrl;
+      if (profile.bio) patchData.bio = profile.bio;
+      if (profile.shortUrl) patchData.profile_url = profile.shortUrl;
       if (Object.keys(patchData).length) await store.patchUser(user.id, patchData);
     }
 
+    const normalized = items.map((raw) => normalizeCreation(raw, user));
     const rows = normalized.map((c) => {
       const row = {};
       for (const [k, v] of Object.entries(c)) {

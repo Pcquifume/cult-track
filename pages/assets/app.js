@@ -989,15 +989,17 @@ async function runSync() {
     let offset = 0;
     let total = null;
     let pages = 0;
+    let profile = null;
     while (pages < CONFIG.MAX_SYNC_STEPS) {
       if (cancelled) throw new Error("Synchronisation annulée.");
       const myself = await cultsFetchPage(Q_CREATIONS, Q_CREATIONS_SAFE, { limit: SYNC_PAGE_SIZE, offset }, "creationsBatch");
       const batch = myself && myself.creationsBatch;
       if (!batch) break;
+      if (!profile && myself && myself.user) profile = myself.user;
 
       const items = batch.results || [];
       total = typeof batch.total === "number" ? batch.total : total;
-      await api("/api/ingest", { method: "POST", body: { stage: "creations", items } });
+      await api("/api/ingest", { method: "POST", body: { stage: "creations", items, profile } });
       offset += items.length;
       pages++;
       updateSyncProgress({ stage: "creations", offset, total }, false);
