@@ -105,6 +105,7 @@ export async function buildDashboard(store, user) {
       currency: c.currency || "EUR",
       visibility: c.visibility || null,
       publishedAt: c.published_at || null,
+      madeWithAi: c.made_with_ai === true,
       views: Number(c.views) || 0,
       likes: Number(c.likes) || 0,
       downloads: Number(c.downloads) || 0,

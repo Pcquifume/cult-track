@@ -144,6 +144,35 @@ function downloadCsv(filename, rows) {
 }
 
 /* ==========================================================================
+   Notifications & tendances
+   ========================================================================== */
+function toast(msg, type = "info") {
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 320); }, 4200);
+}
+
+// Écart entre les deux derniers points d'un historique (dernière synchro vs précédente).
+function trendDelta(points, key) {
+  if (!points || points.length < 2) return null;
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  return Number(last[key]) - Number(prev[key]);
+}
+
+function trendHtml(points, key, unit) {
+  const delta = trendDelta(points, key);
+  if (delta == null) return `<span class="trend flat">—</span>`;
+  const up = delta > 0;
+  const cls = delta === 0 ? "flat" : up ? "up" : "down";
+  const arrow = up ? "▲" : delta < 0 ? "▼" : "•";
+  return `<span class="trend ${cls}" title="Depuis la dernière synchronisation">${arrow} ${num(Math.abs(delta))} ${unit}</span>`;
+}
+
+/* ==========================================================================
    API
    ========================================================================== */
 async function api(path, { method = "GET", body } = {}) {
@@ -518,6 +547,32 @@ function renderDashboardShell(d) {
         </div>
       </div>
 
+      <div class="section-title">Ventes récentes</div>
+      <div class="card">
+        <div class="table-toolbar">
+          <input class="input" id="sales-search" type="search" placeholder="🔍 Rechercher : acheteur, création…" autocomplete="off" />
+          <div class="table-btns">
+            <button class="btn btn-ghost" id="btn-export-sales2" title="Télécharger toutes les ventes en CSV">⬇ CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="sales-table">
+            <thead>
+              <tr>
+                <th class="num" data-sort="created_at" title="Trier par date">Date ⇅</th>
+                <th>Création</th>
+                <th>Acheteur</th>
+                <th class="num" data-sort="income_cents" title="Trier par revenu">Revenu ⇅</th>
+                <th class="num">TVA</th>
+                <th class="num">Remise</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="table-actions" id="sales-actions"></div>
+      </div>
+
       <div class="section-title">Audience &amp; engagement</div>
       <div class="grid-2">
         <div class="card span-2">
@@ -557,6 +612,7 @@ function renderDashboardShell(d) {
                 <th class="num" data-sort="downloads" title="Trier par téléchargements">Téléch. ⇅</th>
                 <th class="num" data-sort="salesCount" title="Trier par ventes">Ventes ⇅</th>
                 <th class="num" data-sort="revenueCents" title="Trier par revenus">Revenus ⇅</th>
+                <th class="num" title="Évolution depuis la dernière synchronisation">Tendance</th>
                 <th>Courbe</th>
               </tr>
             </thead>
@@ -583,8 +639,9 @@ function renderDashboardShell(d) {
     try {
       await runSync();
       await loadDashboard();
+      toast("Synchronisation terminée", "success");
     } catch (err) {
-      alert("Synchronisation impossible : " + err.message);
+      toast("Synchronisation impossible : " + err.message, "error");
     }
   });
   $("#btn-logout").addEventListener("click", () => {
@@ -605,7 +662,7 @@ function renderDashboardShell(d) {
       clearSession();
       renderLogin("Compte supprimé.");
     } catch (err) {
-      alert("Erreur : " + err.message);
+      toast("Erreur : " + err.message, "error");
     }
   });
 }
@@ -617,6 +674,7 @@ function renderKpis(d) {
   const growth = monthlyGrowth(months);
   const items = [
     { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
+    { label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
     { label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
     { label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
     { label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
@@ -704,7 +762,7 @@ function refreshTable(d) {
     });
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><strong>${q ? "Aucune correspondance" : "Aucune création"}</strong>
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><strong>${q ? "Aucune correspondance" : "Aucune création"}</strong>
       ${q ? "Aucune création ne correspond à votre recherche." : "Publiez des modèles 3D, puis lancez une synchronisation."}</div></td></tr>`;
     actions.innerHTML = "";
     return;
@@ -723,7 +781,7 @@ function refreshTable(d) {
               : `<div class="cre-thumb cre-thumb-ph">⬡</div>`}
             <div>
               <div class="cre-name">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener" class="cre-link" onclick="event.stopPropagation()">${esc(c.name)}</a>` : esc(c.name)}</div>
-              <div class="cre-meta">${esc(fmtDate(c.publishedAt))} · ${esc(c.visibility || "inconnu")}</div>
+              <div class="cre-meta">${esc(fmtDate(c.publishedAt))} · ${esc(c.visibility || "inconnu")}${c.madeWithAi ? ` · <span class="pill pill-ai">IA</span>` : ""}</div>
             </div>
           </div>
         </td>
@@ -733,6 +791,7 @@ function refreshTable(d) {
         <td class="num">${num(c.downloads)}</td>
         <td class="num">${num(c.salesCount)}</td>
         <td class="num"><strong>${esc(money(c.revenueCents, d.user.currency, true))}</strong></td>
+        <td class="num trend-col">${trendHtml(c.spark, "views", "vues")}<br />${trendHtml(c.spark, "downloads", "tél.")}</td>
         <td>${sparkline(c.spark, "downloads")}</td>
       </tr>`;
     })
@@ -776,6 +835,96 @@ function bindTableInteractions(d) {
   if (expCreations) expCreations.addEventListener("click", exportCreationsCsv);
 }
 
+/* ==========================================================================
+   Ventes récentes (tableau, recherche, tri, export)
+   ========================================================================== */
+const salesUI = { data: [], q: "", sort: "created_at", dir: -1, limit: 50 };
+const SALES_SORTABLE = ["created_at", "income_cents"];
+
+async function loadSales() {
+  const r = await api("/api/sales");
+  const list = (r && r.sales) || [];
+  salesUI.data = list.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  salesUI.limit = 50;
+  renderSales();
+  bindSalesInteractions();
+}
+
+function renderSales() {
+  const tbody = $("#sales-table tbody");
+  const actions = $("#sales-actions");
+  if (!tbody) return;
+
+  const q = salesUI.q.trim().toLowerCase();
+  const rows = [...salesUI.data]
+    .filter((s) => {
+      if (!q) return true;
+      return `${s.creation_name || ""} ${s.buyer_nick || ""} ${s.creation_id || ""}`.toLowerCase().indexOf(q) !== -1;
+    })
+    .sort((a, b) => {
+      if (salesUI.sort === "created_at") {
+        return String(a.created_at || "").localeCompare(String(b.created_at || "")) * salesUI.dir;
+      }
+      return ((Number(a.income_cents) || 0) - (Number(b.income_cents) || 0)) * salesUI.dir;
+    });
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><strong>${q ? "Aucune vente ne correspond" : "Aucune vente"}</strong>
+      ${q ? "Essayez un autre nom d'acheteur ou de création." : "Les ventes apparaissent après une synchronisation."}</div></td></tr>`;
+    actions.innerHTML = "";
+    return;
+  }
+
+  const visible = rows.slice(0, salesUI.limit);
+  tbody.innerHTML = visible
+    .map((s) => {
+      const total = (Number(s.income_cents) || 0) + (Number(s.vat_cents) || 0);
+      return `
+      <tr class="sale-row" ${s.creation_id ? `data-id="${esc(s.creation_id)}" title="Cliquer pour voir la création"` : ""}>
+        <td class="num">${esc(fmtDateTime(s.created_at))}</td>
+        <td>${s.creation_id && (tableUI.data || []).some((c) => String(c.id) === String(s.creation_id)) ? `<a class="cre-link">${esc(s.creation_name || s.creation_id)}</a>` : esc(s.creation_name || s.creation_id || "—")}</td>
+        <td>${esc(s.buyer_nick || "—")}</td>
+        <td class="num"><strong>${esc(money(s.income_cents, s.currency, true))}</strong></td>
+        <td class="num">${esc(money(s.vat_cents || 0, s.currency, true))}</td>
+        <td class="num">${s.discount_percentage != null && s.discount_percentage > 0 ? `${s.discount_percentage} %` : "—"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  actions.innerHTML = `
+    <span style="font-size:13px;color:var(--muted)">
+      ${visible.length} / ${rows.length} vente(s)${salesUI.q ? ` · filtre « ${esc(salesUI.q)} »` : ""}
+    </span>
+    ${rows.length > salesUI.limit ? `<button class="btn btn-ghost" id="btn-more-sales">Afficher plus (${rows.length - salesUI.limit})</button>` : ""}`;
+
+  const more = $("#btn-more-sales");
+  if (more) more.addEventListener("click", () => { salesUI.limit += 100; renderSales(); });
+}
+
+function bindSalesInteractions() {
+  const search = $("#sales-search");
+  if (search) search.addEventListener("input", (e) => { salesUI.q = e.target.value; salesUI.limit = 50; renderSales(); });
+
+  $$("#sales-table th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (!SALES_SORTABLE.includes(key)) return;
+      if (salesUI.sort === key) salesUI.dir = -salesUI.dir;
+      else { salesUI.sort = key; salesUI.dir = -1; }
+      renderSales();
+    });
+  });
+
+  const tbody = $("#sales-table tbody");
+  if (tbody) tbody.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) openCreationDetail(tr.getAttribute("data-id"));
+  });
+
+  const exp = $("#btn-export-sales2");
+  if (exp) exp.addEventListener("click", exportSalesCsv);
+}
+
 function exportCreationsCsv() {
   const rows = [["Nom", "URL", "Prix", "Vues", "Likes", "Téléchargements", "Ventes", "Revenus", "Visibilité", "Publiée", "Tags"]];
   for (const c of tableUI.data) {
@@ -814,7 +963,7 @@ async function exportSalesCsv() {
     }
     downloadCsv("ventes.csv", rows);
   } catch (e) {
-    alert("Export impossible : " + e.message);
+    toast("Export impossible : " + e.message, "error");
   }
 }
 
@@ -844,6 +993,7 @@ async function openCreationDetail(id) {
               ${src.url ? `<a class="cre-link" href="${esc(src.url)}" target="_blank" rel="noopener">Voir sur Cults3D ↗</a>` : ""}
               ${src.publishedAt ? ` · publiée le ${esc(fmtDate(src.publishedAt, false))}` : ""}
               ${src.visibility ? ` · <span class="pill ${src.priceCents > 0 ? "pill-paid" : "pill-free"}">${src.priceCents > 0 ? esc(money(src.priceCents, src.currency)) : "Gratuit"}</span>` : ""}
+              ${src.madeWithAi ? ` · <span class="pill pill-ai">IA</span>` : ""}
             </div>
           </div>
         </div>
@@ -1358,6 +1508,7 @@ async function loadDashboard() {
   renderTable(d);
   bindTableInteractions(d);
   drawCharts(d);
+  loadSales().catch(() => { /* le tableau des ventes est non bloquant */ });
 }
 
 async function boot() {
