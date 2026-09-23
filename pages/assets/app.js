@@ -469,10 +469,7 @@ async function cultsFetch(query, variables = {}) {
 const cultsPause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ==========================================================================
-   Vues
-   ========================================================================== */
-/* ==========================================================================
-   Vues
+   Préférences d'affichage (thèmes)
    ========================================================================== */
 function openThemePrefs() {
   const overlay = document.createElement("div");
@@ -583,10 +580,11 @@ async function onLogin(e) {
       if (!realNick) throw new Error("Cults3D n'a pas confirmé votre pseudo.");
     }
 
-    // 2. Enregistrement côté Worker (validation faite → skipValidate).
+    // 2. Enregistrement côté Worker — le Worker revalide TOUJOURS la paire
+    // pseudo/clé auprès de Cults3D (direct sinon via le relais).
     const res = await api("/api/configure", {
       method: "POST",
-      body: { nick: realNick, apiKey, skipValidate: true },
+      body: { nick: realNick, apiKey },
     });
     sessionStorage.setItem("culttrack_apikey", apiKey);
     saveSession(res.token, res.user.nick);
@@ -625,9 +623,12 @@ function renderDashboardShell(d) {
 
     <main class="container">
       <section class="card profile">
-        ${u.avatarUrl
-          ? `<img class="avatar" src="${esc(u.avatarUrl)}" alt="Avatar de ${esc(u.nick)}" onerror="this.outerHTML='<div class=\\'avatar-fallback\\'>${esc((u.nick || "?")[0].toUpperCase())}</div>'" />`
-          : `<div class="avatar-fallback">${esc((u.nick || "?")[0].toUpperCase())}</div>`}
+        <div class="avatar-wrap">
+          ${u.avatarUrl
+            ? `<img class="avatar" src="${esc(u.avatarUrl)}" alt="Avatar de ${esc(u.nick)}" onerror="this.hidden=true" />`
+            : ""}
+          <div class="avatar-fallback">${esc((u.nick || "?")[0].toUpperCase())}</div>
+        </div>
         <div class="profile-info">
           <h2>${esc(u.nick)} <span class="tag">Cults3D</span></h2>
           ${u.bio ? `<p class="bio">${esc(u.bio)}</p>` : ""}
@@ -864,10 +865,11 @@ function renderKpis(d) {
    ========================================================================== */
 const tableUI = { data: [], q: "", sort: "revenueCents", dir: -1, all: false };
 
-function sparkline(points, key = "views") {
+function sparkline(points, key = "views", uid = "x") {
   if (!points || points.length < 2) {
     return `<span style="color:var(--muted-2);font-size:12px">—</span>`;
   }
+  const gid = "sg" + String(uid).replace(/[^\w]/g, "");
   const vals = points.map((p) => p[key] || 0);
   const w = 90;
   const h = 26;
@@ -881,10 +883,10 @@ function sparkline(points, key = "views") {
   const last = coords[coords.length - 1];
   return `
     <svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
-      <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#7c5cff" stop-opacity=".45"/><stop offset="1" stop-color="#00d4ff" stop-opacity="0"/>
       </linearGradient></defs>
-      <path d="${area}" fill="url(#sg)"/>
+      <path d="${area}" fill="url(#${gid})"/>
       <path d="${path}" fill="none" stroke="#00d4ff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
       <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.4" fill="#7c5cff"/>
     </svg>`;
@@ -947,7 +949,7 @@ function refreshTable(d) {
         <td class="num">${num(c.salesCount)}</td>
         <td class="num"><strong>${esc(money(c.revenueCents, d.user.currency, true))}</strong></td>
         <td class="num trend-col">${trendHtml(c.spark, "views", "vues")}<br />${trendHtml(c.spark, "downloads", "tél.")}</td>
-        <td>${sparkline(c.spark, "downloads")}</td>
+        <td>${sparkline(c.spark, "downloads", c.id)}</td>
       </tr>`;
     })
     .join("");
@@ -1117,7 +1119,7 @@ function convRows(d) {
 function renderConv(d) {
   d = d || state.data;
   const tbody = $("#conv-table tbody");
-  if (!tbody) return;
+  if (!d || !d.creations || !tbody) return;
   const countEl = $("#conv-count");
   const q = convUI.q.trim().toLowerCase();
   const rows = convRows(d)

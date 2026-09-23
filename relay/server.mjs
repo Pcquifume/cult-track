@@ -26,6 +26,50 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const PORT = Number(process.env.CULTS_RELAY_PORT || 8790);
 const HOST = process.env.CULTS_RELAY_HOST || "127.0.0.1";
+const MAX_BODY_BYTES = 100 * 1024; // 100 Ko (l'API Cults3D n'accepte pas plus)
+
+// --- Rate limiting simple par IP (token bucket) --------------------------------
+const RATE_MAX_REQ = 40; // requêtes par fenêtre
+const RATE_WINDOW_MS = 10_000;
+const ipBuckets = new Map(); // ip -> { tokens, last }
+
+function clientIp(req) {
+  // Derrière Render, on lit l'en-tête de terminaison ; sinon socket.
+  const xf = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return xf || req.socket.remoteAddress || "unknown";
+}
+
+function rateLimit(ip) {
+  const now = Date.now();
+  let b = ipBuckets.get(ip);
+  if (!b) b = { tokens: RATE_MAX_REQ, last: now };
+  b.tokens = Math.min(RATE_MAX_REQ, b.tokens + (RATE_MAX_REQ / RATE_WINDOW_MS) * (now - b.last));
+  b.last = now;
+  if (b.tokens < 1) {
+    ipBuckets.set(ip, b);
+    return -1; // bloqué
+  }
+  b.tokens -= 1;
+  ipBuckets.set(ip, b);
+  return Math.floor(b.tokens);
+}
+
+// Ménage mémoire : ne garder que les IPs actives récemment.
+const LIMIT_CLEANUP_MS = 60_000;
+setInterval(() => {
+  if (ipBuckets.size < 1000) return;
+  const now = Date.now();
+  for (const [ip, b] of ipBuckets) {
+    if (now - b.last > LIMIT_CLEANUP_MS) ipBuckets.delete(ip);
+  }
+}, LIMIT_CLEANUP_MS).unref();
+
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+};
 
 function loadConfig() {
   const fp = join(HERE, "relay.config.json");
@@ -68,8 +112,13 @@ function corsHeaders(req) {
   };
 }
 
-function send(res, req, status, obj) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(req) });
+function send(res, req, status, obj, extra = {}) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...corsHeaders(req),
+    ...SECURITY_HEADERS,
+    ...extra,
+  });
   res.end(JSON.stringify(obj));
 }
 
@@ -97,8 +146,33 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/graphql") {
+    const ip = clientIp(req);
+    const remaining = rateLimit(ip);
+    if (remaining < 0) {
+      return send(
+        res,
+        req,
+        429,
+        { error: "Trop de requêtes depuis cette adresse. Réessayez dans quelques secondes." },
+        { "Retry-After": String(Math.ceil(RATE_WINDOW_MS / 1000)) }
+      );
+    }
+    const rateHeaders = { "X-RateLimit-Remaining": String(remaining), "X-RateLimit-Limit": String(RATE_MAX_REQ) };
+
     let body = "";
-    for await (const chunk of req) body += chunk;
+    let bytes = 0;
+    let tooLarge = false;
+    for await (const chunk of req) {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        tooLarge = true;
+        break;
+      }
+      body += chunk;
+    }
+    if (tooLarge) {
+      return send(res, req, 413, { error: "Corps de requête trop grand (max 100 Ko)." }, rateHeaders);
+    }
     let payload;
     try {
       payload = JSON.parse(body);
@@ -148,6 +222,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(status, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
+        ...SECURITY_HEADERS,
+        ...rateHeaders,
         "X-Cults-Nick": nick,
         "X-Cults-Rate-Limit": out.headers.get("x-ratelimit-limit") || "",
         "X-Cults-Rate-Remaining": out.headers.get("x-ratelimit-remaining") || "",

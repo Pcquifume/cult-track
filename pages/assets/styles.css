@@ -350,6 +350,10 @@ html[data-theme="light"] .btn-primary { color: #fff; }
   width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
   border: 2px solid var(--border-2);
 }
+.avatar-wrap { position: relative; display: inline-flex; }
+.avatar-wrap .avatar-fallback { display: none; }
+.avatar-wrap > img[hidden] + .avatar-fallback,
+.avatar-wrap > .avatar-fallback:first-child { display: grid; }
 .avatar-fallback {
   width: 64px; height: 64px; border-radius: 50%; background: var(--surface-3);
   border: 1px solid var(--border-2);

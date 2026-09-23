@@ -14,6 +14,7 @@ compatibility_date = "2025-01-01"
 [vars]
 SUPABASE_URL = "https://jieqlemhubgnhuvktqbb.supabase.co"
 CULTS_ENDPOINT = "https://cults3d.com/graphql"
+RELAY_URL = "https://culttrack-relay.onrender.com/graphql"
 
 # --- Synchronisation automatique (toutes les 4h) -----------------------------
 # Les déclencheurs cron ne sont disponibles que sur les plans Workers *payants*.

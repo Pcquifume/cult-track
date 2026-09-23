@@ -27,10 +27,17 @@ const CORS = {
   "Access-Control-Max-Age": "86400",
 };
 
+const SECURITY = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+};
+
 function json(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...CORS, ...extra },
+    headers: { "Content-Type": "application/json; charset=utf-8", ...CORS, ...SECURITY, ...extra },
   });
 }
 
@@ -54,6 +61,10 @@ function maskKey(key) {
   return k.length > 8 ? `${k.slice(0, 4)}…${k.slice(-4)}` : k.slice(0, 4) + "…";
 }
 
+// Au-delà, la session est supprimée et l'utilisateur doit se reconnecter.
+const SESSION_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_INGEST_ITEMS = 300;
+
 // ---------------------------------------------------------------------------
 // Configuration commune (store + décrypteur de clé API Cults3D)
 // ---------------------------------------------------------------------------
@@ -66,7 +77,8 @@ function makeEnv(env) {
     serviceKey: env.SUPABASE_SERVICE_KEY,
   });
   const endpoint = env.CULTS_ENDPOINT || "https://cults3d.com/graphql";
-  return { store, endpoint, encKey: env.ENC_KEY || "" };
+  const relayUrl = env.RELAY_URL || "https://culttrack-relay.onrender.com/graphql";
+  return { store, endpoint, encKey: env.ENC_KEY || "", relayUrl };
 }
 
 // ---------------------------------------------------------------------------
@@ -96,8 +108,17 @@ export default {
       const token = bearerToken(request);
       if (!token) return error("Session requise", 401, "AUTH_REQUIRED");
       const tokenHash = await hashToken(token);
-      const user = await ctx.store.getUserBySession(tokenHash);
-      if (!user) return error("Session invalide ou expirée", 401, "AUTH_INVALID");
+      const session = await ctx.store.getSession(tokenHash);
+      if (!session) return error("Session invalide ou expirée", 401, "AUTH_INVALID");
+      const user = await ctx.store.getUserById(session.user_id);
+      if (!user) return error("Session invalide", 401, "AUTH_INVALID");
+      if (session.last_used_at) {
+        const ageMs = Date.now() - new Date(session.last_used_at).getTime();
+        if (ageMs > SESSION_MAX_AGE_MS) {
+          await ctx.store.del("sessions", { token_hash: `eq.${tokenHash}` });
+          return error("Session expirée, reconnectez-vous.", 401, "SESSION_EXPIRED");
+        }
+      }
       await ctx.store.touchSession(tokenHash);
       ctx.user = user;
 
@@ -121,6 +142,9 @@ export default {
       if (path === "/api/ingest" && request.method === "POST") {
         const body = await readBody(request);
         if (!body) return error("Corps de requête invalide.", 400, "BAD_INPUT");
+        if (Array.isArray(body.items) && body.items.length > MAX_INGEST_ITEMS) {
+          return error("Lot de données trop grand.", 413, "PAYLOAD_TOO_LARGE");
+        }
         const progress = await ingestBatch(user, ctx.store, body);
         return json({ status: "ok", ...progress });
       }
@@ -170,6 +194,9 @@ export default {
     } catch (e) {
       console.error("cult-track error:", e && e.message, e && e.stack);
       const status = e && e.status ? e.status : 500;
+      if (status >= 500 && (!e.code || e.code === "INTERNAL")) {
+        return error("Erreur interne. Réessayez.", status, "INTERNAL");
+      }
       return error(e && e.message ? e.message : "Erreur interne", status, e && e.code ? e.code : "INTERNAL");
     }
   },
@@ -201,70 +228,118 @@ export default {
 };
 
 // ---------------------------------------------------------------------------
-// POST /api/configure
+// POST /api/configure — validation OBLIGATOIRE des identifiants.
+//
+// Cults3D bloque parfois les appels directs du Worker (HTTP 403 anti-bot) ;
+// on bascule alors sur le RELAIS central (Render), qui appelle cults3d.com avec
+// les identifiants fournis. En aucun cas une paire pseudo/clé n'est enregistrée
+// sans avoir été validée auprès de Cults3D — sinon quiconque connaissant un
+// pseudo public pourrait écraser la clé d'un compte existant.
 // ---------------------------------------------------------------------------
+async function validateKey(ctx, nick, apiKey) {
+  // 1) Appel direct Worker → Cults3D.
+  try {
+    const out = await graphqlWithBackoff(
+      { nick, apiKey, endpoint: ctx.endpoint, query: VALIDATE_QUERY },
+      { retries: 2, baseDelay: 400 }
+    );
+    const me = out.data && out.data.myself && out.data.myself.user;
+    if (me && me.nick) return { me };
+  } catch (e) {
+    if (e.code === "CULTS_GRAPHQL_ERROR") {
+      // Champ de schéma en cause → réessai avec la requête minimale.
+      try {
+        const out2 = await graphqlWithBackoff(
+          { nick, apiKey, endpoint: ctx.endpoint, query: MINIMAL_VALIDATE_QUERY },
+          { retries: 1, baseDelay: 400 }
+        );
+        const me2 = out2.data && out2.data.myself && out2.data.myself.user;
+        if (me2 && me2.nick) return { me: me2 };
+      } catch (e2) {
+        if (e2.code === "CULTS_GRAPHQL_ERROR") throw e2;
+      }
+    }
+    const blocked = e.status === 403 || e.status === 401 || e.code === "CULTS_NON_JSON";
+    if (!blocked) throw e;
+  }
+
+  // 2) Repli : validation via le relais central (aucun identifiant n'est
+  // transmis au relais sans être présents ici).
+  let res;
+  try {
+    res = await fetch(ctx.relayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "User-Agent": "cult-track-worker/1.0",
+        Authorization: "Basic " + btoa(`${nick}:${apiKey}`),
+      },
+      body: JSON.stringify({ query: VALIDATE_QUERY, variables: {} }),
+    });
+  } catch {
+    const err = new Error("Le relais central est injoignable.");
+    err.code = "CULTS_VALIDATION_UNAVAILABLE";
+    throw err;
+  }
+
+  let text = "";
+  try { text = await res.text(); } catch { /* ignore */ }
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* réponse non JSON */ }
+
+  if (json && Array.isArray(json.errors)) {
+    const err = new Error(json.errors.map((x) => x.message).join(" ; "));
+    err.code = "CULTS_GRAPHQL_ERROR";
+    throw err;
+  }
+  if (!res.ok) {
+    const err = new Error("HTTP " + res.status);
+    const code = res.status === 401 || res.status === 403 ? "CULTS_AUTH_FAILED" : "CULTS_VALIDATION_UNAVAILABLE";
+    err.status = res.status;
+    err.code = code;
+    throw err;
+  }
+  const me = json && json.data && json.data.myself && json.data.myself.user;
+  if (me && me.nick) return { me };
+  const err = new Error("Cults3D n'a pas confirmé le pseudo via le relais.");
+  err.code = "CULTS_VALIDATION_UNAVAILABLE";
+  throw err;
+}
+
 async function handleConfigure(request, ctx) {
   const body = await readBody(request);
   const nick = body && typeof body.nick === "string" ? body.nick.trim() : "";
   const apiKey = body && typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-  const skipValidate = body && body.skipValidate === true;
 
   if (!nick || !apiKey) {
     return error("Pseudo (nick) et clé API requis.", 400, "BAD_INPUT");
   }
 
-  // 1. Validation auprès de Cults3D. En mode "direct", le NAVIGATEUR a déjà
-  // validé la clé (le Worker est parfois bloqué par la protection anti-bot) ;
-  // on l'accepte alors sans appel à cults3d.com/graphql.
-  let me = skipValidate ? { nick } : null;
-  if (!skipValidate) {
-    try {
-      try {
-        // Pas de retry long pendant une validation (401 = clé invalide).
-        const out = await graphqlWithBackoff(
-          {
-            nick,
-            apiKey,
-            endpoint: ctx.endpoint,
-            query: VALIDATE_QUERY,
-          },
-          { retries: 2, baseDelay: 400 }
-        );
-        me = out.data && out.data.myself && out.data.myself.user;
-      } catch (e) {
-        // Champ optionnel du schéma en cause ? Réessai avec la requête minimale.
-        if (e.code !== "CULTS_GRAPHQL_ERROR") throw e;
-        const out2 = await graphqlWithBackoff(
-          {
-            nick,
-            apiKey,
-            endpoint: ctx.endpoint,
-            query: MINIMAL_VALIDATE_QUERY,
-          },
-          { retries: 1, baseDelay: 400 }
-        );
-        me = out2.data && out2.data.myself && out2.data.myself.user;
-      }
-    } catch (e) {
-      if (e.code === "CULTS_GRAPHQL_ERROR") {
-        return error("Le schéma Cults3D a rejeté la requête : " + e.message, 502, "CULTS_GRAPHQL_ERROR");
-      }
-      if (e.status === 401) {
-        return error(
-          "Clé API Cults3D invalide ou expirée. Recréez une clé sur https://cults3d.com/en/api/keys.",
-          401,
-          "CULTS_AUTH_FAILED"
-        );
-      }
-      if (e.status === 403 || e.code === "CULTS_NON_JSON") {
-        return error(
-          "Cults3D a bloqué l'appel du Worker (HTTP 403). C'est généralement temporaire (protection anti-bot) — patientez quelques minutes puis réessayez.",
-          403,
-          "CULTS_BLOCKED"
-        );
-      }
-      throw e;
+  // Validation auprès de Cults3D (direct, sinon relais). Jamais court-circuitée.
+  let me;
+  try {
+    const out = await validateKey(ctx, nick, apiKey);
+    me = out.me;
+  } catch (e) {
+    if (e.code === "CULTS_GRAPHQL_ERROR") {
+      return error("Le schéma Cults3D a rejeté la requête : " + e.message, 502, "CULTS_GRAPHQL_ERROR");
     }
+    if (e.code === "CULTS_AUTH_FAILED") {
+      return error(
+        "Clé API Cults3D invalide ou expirée. Recréez une clé sur https://cults3d.com/en/api/keys.",
+        401,
+        "CULTS_AUTH_FAILED"
+      );
+    }
+    if (e.code === "CULTS_VALIDATION_UNAVAILABLE") {
+      return error(
+        "Cults3D bloque temporairement les appels et le relais est injoignable. Réessayez dans ~1 minute.",
+        503,
+        "CULTS_VALIDATION_UNAVAILABLE"
+      );
+    }
+    throw e;
   }
   if (!me || !me.nick) {
     return error("Réponse inattendue de Cults3D.", 502, "CULTS_UNEXPECTED");

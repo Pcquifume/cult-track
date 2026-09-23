@@ -69,7 +69,7 @@ export function createStore({ url, serviceKey }) {
   // Sessions applicatives
   // -------------------------------------------------------------------------
   async function getSession(tokenHash) {
-    const r = await get("sessions", { token_hash: `eq.${tokenHash}`, select: "user_id", limit: "1" });
+    const r = await get("sessions", { token_hash: `eq.${tokenHash}`, select: "user_id,last_used_at", limit: "1" });
     return r.json && r.json[0] ? r.json[0] : null;
   }
 
