@@ -390,7 +390,7 @@ function renderLogin(msg = null, error = null) {
       <div class="card login-card">
         <div class="login-brand">
           <div class="logo-mark">◈</div>
-          <h1>cult<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">track</span></h1>
+          <h1>cult<span style="color:var(--accent)">track</span></h1>
           <p>Statistiques, courbes et analyses pour vos modèles 3D publiés sur <strong>Cults3D</strong>.</p>
         </div>
 
@@ -673,22 +673,21 @@ function renderKpis(d) {
   const best = months.slice().sort((a, b) => b.cents - a.cents)[0];
   const growth = monthlyGrowth(months);
   const items = [
-    { label: "Revenus", icon: "💶", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
-    { label: "Panier moyen", icon: "🧺", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
-    { label: "Téléchargements", icon: "⬇️", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
-    { label: "Vues", icon: "👁️", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
-    { label: "Likes", icon: "❤️", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
-    { label: "Abonnés", icon: "👥", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
-    { label: "Catalogue", icon: "🗂️", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
+    { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
+    { label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
+    { label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
+    { label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
+    { label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
+    { label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
+    { label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
   ];
   if (best) {
-    items.push({ label: "Meilleur mois", icon: "🏆", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
+    items.push({ label: "Meilleur mois", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
   }
   if (growth && growth.delta != null) {
     const up = growth.delta >= 0;
     items.push({
       label: `Croissance · ${esc(growth.label)}`,
-      icon: up ? "📈" : "📉",
       value: `<span style="color:${up ? "var(--pos)" : "var(--neg)"}">${up ? "▲" : "▼"} ${pct(Math.abs(growth.delta))}</span>`,
       foot: `vs ${esc(growth.prevLabel)}`,
     });
@@ -697,10 +696,7 @@ function renderKpis(d) {
     .map(
       (i) => `
       <div class="card kpi">
-        <div class="kpi-head">
-          <span class="kpi-label">${esc(i.label)}</span>
-          <span class="kpi-icon" aria-hidden="true">${i.icon}</span>
-        </div>
+        <div class="kpi-label">${esc(i.label)}</div>
         <div class="kpi-value"><span class="accent">${i.value}</span></div>
         <div class="kpi-foot">${esc(i.foot || "")}</div>
       </div>`
