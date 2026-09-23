@@ -141,10 +141,11 @@ function clearSession() {
 }
 
 /* ==========================================================================
-   API Cults3D — via le relais local
+   API Cults3D — via le relais central
    --------------------------------------------------------------------------
    Cults3D bloque le Worker Cloudflare (403) et les appels cross-origin du
-   navigateur (CORS). Le front passe par le relais Node relay/server.mjs,
+   navigateur (CORS). Le front passe par le relais public (Render, Node,
+   relay/server.mjs), qui détient votre clé par requête (Authorization Basic),
    puis envoie chaque lot de résultats au Worker pour stockage/agrégation
    via /api/ingest.
    ========================================================================== */
