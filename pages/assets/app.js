@@ -528,7 +528,7 @@ function renderDashboardShell(d) {
 
       <div class="kpi-grid" id="kpis"></div>
 
-      <div class="section-title">Revenus &amp; ventes</div>
+      <div class="section-title"><b>Revenus &amp; ventes</div>
       <div class="grid-2">
         <div class="card span-2">
           <p class="card-title">Revenus cumulés</p>
@@ -547,7 +547,7 @@ function renderDashboardShell(d) {
         </div>
       </div>
 
-      <div class="section-title">Ventes récentes</div>
+      <div class="section-title"><b>Ventes récentes</div>
       <div class="card">
         <div class="table-toolbar">
           <input class="input" id="sales-search" type="search" placeholder="🔍 Rechercher : acheteur, création…" autocomplete="off" />
@@ -573,7 +573,7 @@ function renderDashboardShell(d) {
         <div class="table-actions" id="sales-actions"></div>
       </div>
 
-      <div class="section-title">Audience &amp; engagement</div>
+      <div class="section-title"><b>Audience &amp; engagement</div>
       <div class="grid-2">
         <div class="card span-2">
           <p class="card-title">Évolution des métriques</p>
@@ -592,7 +592,7 @@ function renderDashboardShell(d) {
         </div>
       </div>
 
-      <div class="section-title">Vos créations</div>
+      <div class="section-title"><b>Vos créations</div>
       <div class="card">
         <div class="table-toolbar">
           <input class="input" id="table-search" type="search" placeholder="🔍 Rechercher : nom, tag, visibilité…" autocomplete="off" />
@@ -673,21 +673,22 @@ function renderKpis(d) {
   const best = months.slice().sort((a, b) => b.cents - a.cents)[0];
   const growth = monthlyGrowth(months);
   const items = [
-    { label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
-    { label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
-    { label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
-    { label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
-    { label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
-    { label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
-    { label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
+    { label: "Revenus", icon: "💶", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
+    { label: "Panier moyen", icon: "🧺", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
+    { label: "Téléchargements", icon: "⬇️", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
+    { label: "Vues", icon: "👁️", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
+    { label: "Likes", icon: "❤️", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
+    { label: "Abonnés", icon: "👥", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
+    { label: "Catalogue", icon: "🗂️", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
   ];
   if (best) {
-    items.push({ label: "Meilleur mois", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
+    items.push({ label: "Meilleur mois", icon: "🏆", value: `${esc(best.label)} <span style="color:var(--muted-2)">•</span> ${money(best.cents, d.user.currency, true)}`, foot: `${num(best.count)} vente(s) sur la période` });
   }
   if (growth && growth.delta != null) {
     const up = growth.delta >= 0;
     items.push({
       label: `Croissance · ${esc(growth.label)}`,
+      icon: up ? "📈" : "📉",
       value: `<span style="color:${up ? "var(--pos)" : "var(--neg)"}">${up ? "▲" : "▼"} ${pct(Math.abs(growth.delta))}</span>`,
       foot: `vs ${esc(growth.prevLabel)}`,
     });
@@ -696,7 +697,10 @@ function renderKpis(d) {
     .map(
       (i) => `
       <div class="card kpi">
-        <div class="kpi-label">${esc(i.label)}</div>
+        <div class="kpi-head">
+          <span class="kpi-label">${esc(i.label)}</span>
+          <span class="kpi-icon" aria-hidden="true">${i.icon}</span>
+        </div>
         <div class="kpi-value"><span class="accent">${i.value}</span></div>
         <div class="kpi-foot">${esc(i.foot || "")}</div>
       </div>`
@@ -806,6 +810,8 @@ function refreshTable(d) {
 
   const showAll = $("#btn-show-all");
   if (showAll) showAll.addEventListener("click", () => { tableUI.all = !tableUI.all; refreshTable(); });
+
+  markSortHeader($("#creations-table"), tableUI.sort, tableUI.dir);
 }
 
 function bindTableInteractions(d) {
@@ -840,6 +846,14 @@ function bindTableInteractions(d) {
    ========================================================================== */
 const salesUI = { data: [], q: "", sort: "created_at", dir: -1, limit: 50 };
 const SALES_SORTABLE = ["created_at", "income_cents"];
+
+function markSortHeader(scope, sortKey, dir) {
+  $$("th[data-sort]", scope).forEach((th) => {
+    const on = th.getAttribute("data-sort") === sortKey;
+    th.classList.toggle("active-sort", on);
+    th.classList.toggle("asc", on && dir > 0);
+  });
+}
 
 async function loadSales() {
   const r = await api("/api/sales");
@@ -899,6 +913,7 @@ function renderSales() {
 
   const more = $("#btn-more-sales");
   if (more) more.addEventListener("click", () => { salesUI.limit += 100; renderSales(); });
+  markSortHeader($("#sales-table"), salesUI.sort, salesUI.dir);
 }
 
 function bindSalesInteractions() {
