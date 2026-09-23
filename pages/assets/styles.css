@@ -3,8 +3,44 @@
    (épuré contrasté) · Clair (lumineux). Palettes via variables CSS.
    ============================================================================ */
 
-/* ------------------------------------------------ Premium (défaut) -------- */
+/* ------------------------------------------------ Clair (par défaut) -------- */
 :root {
+  --bg: #f6f7f9;
+  --bg-2: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-3: #e7eaf0;
+  --border: rgba(20, 24, 34, 0.1);
+  --border-2: rgba(20, 24, 34, 0.2);
+  --border-soft: rgba(20, 24, 34, 0.06);
+  --text: #1c2434;
+  --muted: #5d6778;
+  --muted-2: #8a93a5;
+  --accent: #3767e0;
+  --accent-hover: #2957d4;
+  --accent-soft: rgba(55, 103, 224, 0.1);
+  --accent-border: rgba(55, 103, 224, 0.35);
+  --pos: #1b9e5d;
+  --pos-soft: rgba(27, 158, 93, 0.1);
+  --neg: #d64557;
+  --neg-soft: rgba(214, 69, 87, 0.09);
+  --warn: #b06e0e;
+  --radius: 10px;
+  --shadow: 0 12px 30px rgba(20, 24, 34, 0.1);
+  --shadow-sm: 0 2px 8px rgba(20, 24, 34, 0.06);
+  --card-rise: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --header-bg: rgba(246, 247, 249, 0.88);
+  --overlay-bg: rgba(20, 24, 34, 0.35);
+  --row-hover: rgba(20, 24, 34, 0.04);
+  --row-hover-accent: rgba(55, 103, 224, 0.07);
+  --scroll: #ccd3dd;
+  --sel: rgba(55, 103, 224, 0.24);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ------------------------------------------------- Premium (sombre profond) */
+html[data-theme="premium"],
+.theme-preview[data-preview="premium"] {
   --bg: #090b12;
   --bg-2: #0d1019;
   --surface: #121522;
@@ -113,6 +149,7 @@ html[data-theme="light"],
 html, body { margin: 0; padding: 0; }
 
 body {
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;

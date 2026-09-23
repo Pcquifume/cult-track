@@ -11,12 +11,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="assets/styles.css?v=7" />
+    <script>
+      (function () {
+        var t = "light";
+        try { t = localStorage.getItem("culttrack_theme") || "light"; } catch (e) {}
+        document.documentElement.dataset.theme = t;
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", t === "premium" ? "#090b12" : t === "minimal" ? "#08080a" : "#f6f7f9");
+      })();
+    </script>
+    <link rel="stylesheet" href="assets/styles.css?v=8" />
 </head>
 <body>
   <div id="app"></div>
 
   <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script defer src="assets/app.js?v=7"></script>
+  <script defer src="assets/app.js?v=8"></script>
 </body>
 </html>

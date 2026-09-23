@@ -72,7 +72,7 @@ const PREVIEW_HTML = (key) => `
   </div>`;
 
 function applyTheme(t) {
-  if (!THEMES[t]) t = "premium";
+  if (!THEMES[t]) t = "light";
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem("culttrack_theme", t); } catch { /* ignore */ }
   $$(".theme-preview").forEach((el) => el.classList.toggle("active", el.getAttribute("data-preview") === t));
@@ -92,11 +92,11 @@ function bindThemePreviews() {
 // Couleurs adaptatives pour les graphiques ECharts selon le thème actif.
 function chartTheme() {
   const t = document.documentElement.dataset.theme;
-  if (t === "light") {
+  if (t === "premium") {
     return {
-      grid: "rgba(20,24,34,.09)", axis: "rgba(20,24,34,.2)", label: "#6b7487",
-      tipBg: "rgba(255,255,255,.98)", tipBorder: "rgba(20,24,34,.14)", tipText: "#1c2434",
-      donutBg: "#ffffff", donutLabel: "#3a4354", donutLine: "#b9c2d0",
+      grid: "rgba(255,255,255,.07)", axis: "rgba(255,255,255,.15)", label: "#8a93ab",
+      tipBg: "rgba(21,25,42,.97)", tipBorder: "rgba(255,255,255,.15)", tipText: "#eef1f8",
+      donutBg: "#121522", donutLabel: "#e6eaf4", donutLine: "#5f6790",
     };
   }
   if (t === "minimal") {
@@ -107,9 +107,9 @@ function chartTheme() {
     };
   }
   return {
-    grid: "rgba(255,255,255,.07)", axis: "rgba(255,255,255,.15)", label: "#8a93ab",
-    tipBg: "rgba(21,25,42,.97)", tipBorder: "rgba(255,255,255,.15)", tipText: "#eef1f8",
-    donutBg: "#121522", donutLabel: "#e6eaf4", donutLine: "#5f6790",
+    grid: "rgba(20,24,34,.09)", axis: "rgba(20,24,34,.2)", label: "#6b7487",
+    tipBg: "rgba(255,255,255,.98)", tipBorder: "rgba(20,24,34,.14)", tipText: "#1c2434",
+    donutBg: "#ffffff", donutLabel: "#3a4354", donutLine: "#b9c2d0",
   };
 }
 
@@ -520,11 +520,6 @@ function renderLogin(msg = null, error = null) {
           <button class="btn btn-primary btn-lg" id="login-btn" type="submit">Se connecter &amp; synchroniser</button>
         </form>
 
-        <div class="theme-picker">
-          <label>Apparence</label>
-          <div class="theme-grid">${Object.keys(THEMES).map(PREVIEW_HTML).join("")}</div>
-        </div>
-
         <div class="hint" style="margin-top:16px">
             Cults3D bloque les appels venus du cloud et du navigateur (403/CORS).
             Le site passe par le <strong>relais central</strong> (Render, gratuit) :
@@ -541,7 +536,6 @@ function renderLogin(msg = null, error = null) {
     </div>`;
 
   $("#login-form").addEventListener("submit", onLogin);
-  bindThemePreviews();
   $("#apiKey").focus();
 }
 
@@ -1681,7 +1675,7 @@ function start() {
   booted = true;
   let saved = null;
   try { saved = localStorage.getItem("culttrack_theme"); } catch { /* ignore */ }
-  applyTheme(saved || "premium");
+  applyTheme(saved || "light");
   boot();
 }
 document.addEventListener("DOMContentLoaded", start);
