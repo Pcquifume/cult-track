@@ -9,8 +9,8 @@
 
 const CONFIG = {
   WORKER_URL: "https://cultsstat-api.cybermaitrise.workers.dev", // API (stockage/agrégats)
-  RELAY_URL: "http://127.0.0.1:8790/graphql",
-  RELAY_STATUS_URL: "http://127.0.0.1:8790/status",
+  RELAY_URL: "https://culttrack-relay.onrender.com/graphql",
+  RELAY_STATUS_URL: "https://culttrack-relay.onrender.com/status",
   TOKEN_KEY: "culttrack_token",
   NICK_KEY: "culttrack_nick",
   MAX_SYNC_STEPS: 600,
@@ -365,7 +365,7 @@ async function onLogin(e) {
     const relay = await checkRelay();
     if (!relay || !relay.ok) {
       throw new Error(
-        "Relais Cults3D introuvable (voir CONFIG.RELAY_URL).\nEn local : ouvrez relay/, créez relay.config.json, puis \"npm start\"."
+        "Relais Cults3D injoignable (" + CONFIG.RELAY_URL + ").\nSur le plan gratuit, le relais se met en veille : réessayez dans ~1 min."
       );
     }
 
