@@ -124,7 +124,7 @@ export function createStore({ url, serviceKey }) {
   // Créations
   // -------------------------------------------------------------------------
   const CREATION_SELECT =
-    "id,name,url,image_url,price_value,currency,visibility,published_at,made_with_ai,tags,sales_total_cents,updated_at";
+    "id,name,url,image_url,price_value,currency,visibility,published_at,made_with_ai,tags,sales_total_cents,views,likes,downloads,updated_at";
 
   async function upsertCreations(rows) {
     const r = await upsert("creations", rows.map((c) => ({ ...c, updated_at: new Date().toISOString() })), "id");
