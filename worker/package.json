@@ -1,0 +1,15 @@
+{
+  "name": "culttrack-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret:supabase": "wrangler secret put SUPABASE_SERVICE_KEY",
+    "secret:enc": "wrangler secret put ENC_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

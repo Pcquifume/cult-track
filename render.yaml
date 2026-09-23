@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: culttrack-relay
+    runtime: node
+    region: us-oregon
+    rootDir: relay
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.mjs
+    healthCheckPath: /status
+    envVars:
+      - key: CULTS_RELAY_HOST
+        value: 0.0.0.0

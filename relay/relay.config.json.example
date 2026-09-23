@@ -1,0 +1,5 @@
+{
+  "nick": "VotrePseudoCults3D",
+  "apiKey": "VotreCleAPI",
+  "allowedOrigins": ["https://cult-track.pages.dev"]
+}

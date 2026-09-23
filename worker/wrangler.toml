@@ -1,0 +1,22 @@
+# ============================================================================
+# cult-track · Configuration du Worker Cloudflare
+# ---------------------------------------------------------------
+# 1. npx wrangler login
+# 2. npx wrangler secret put SUPABASE_SERVICE_KEY   (la clé "role key" Supabase)
+#    npx wrangler secret put ENC_KEY                (générée avec : openssl rand -base64 32)
+# 3. npx wrangler deploy
+# ============================================================================
+
+name = "cultsstat-api"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+SUPABASE_URL = "https://jieqlemhubgnhuvktqbb.supabase.co"
+CULTS_ENDPOINT = "https://cults3d.com/graphql"
+
+# --- Synchronisation automatique (toutes les 4h) -----------------------------
+# Les déclencheurs cron ne sont disponibles que sur les plans Workers *payants*.
+# Décommentez ce bloc si vous avez un plan Workers payant :
+# [triggers]
+# crons = ["0 */4 * * *"]
