@@ -3,8 +3,9 @@
    ----------------------------------------------------------------------------
    Cults3D bloque à la fois les appels venant du Worker Cloudflare (HTTP 403
    anti-bot) et les appels cross-origin du navigateur (pas de CORS). Le front
-   passe donc par un RELAIS LOCAL (relay/server.mjs, Node) qui appelle Cults3D
-   et renvoie les réponses.
+   passe donc par un RELAIS (relay/server.mjs, Node, hébergé sur Render en
+   "mode central") qui appelle Cults3D pour chaque utilisateur avec sa clé
+   (Authorization Basic) et renvoie les réponses.
    ============================================================================ */
 
 const CONFIG = {
@@ -283,7 +284,7 @@ async function cultsFetch(query, variables = {}) {
     json = JSON.parse(text);
   } catch {
     throw new Error(
-      `Relais Cults3D injoignable (HTTP ${res.status}). Démarrez-le : "npm start" dans le dossier relay/ (voir README).`
+      `Relais Cults3D injoignable (HTTP ${res.status}). S'il était en veille (plan gratuit), réessayez dans ~1 min.`
     );
   }
 
