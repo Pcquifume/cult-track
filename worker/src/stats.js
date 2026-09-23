@@ -150,6 +150,8 @@ export async function buildDashboard(store, user) {
       avgRevenuePerCreation: creations.length ? Math.round(revenueCents / creations.length) : 0,
       avgViewsPerCreation: creations.length ? Math.round(totalViews / creations.length) : 0,
       conversionRate: totalViews ? sales.length / totalViews : 0,
+      downloadRate: totalViews ? totalDownloads / totalViews : 0,
+      avgRevenuePerPaidCreation: paid.length ? Math.round(paidRevenue / paid.length) : 0,
     },
     revenue,
     engagement,

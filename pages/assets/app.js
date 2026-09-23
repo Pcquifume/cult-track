@@ -54,6 +54,8 @@ const ICONS = {
   trophy: SVG(`<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 5H4.5A2.5 2.5 0 0 0 7 8.2M17 5h2.5A2.5 2.5 0 0 1 17 8.2"/><path d="M12 13v4"/><path d="M8.5 20h7"/>`),
   up: SVG(`<path d="M3 17l5.5-5.5L12 15l8.5-8.5"/><path d="M15 6.5h5.5V12"/>`),
   down: SVG(`<path d="M3 7l5.5 5.5L12 9l8.5 8.5"/><path d="M15 17.5h5.5V12"/>`),
+  percent: SVG(`<circle cx="12" cy="12" r="8.2"/><path d="M9 9l6 6"/><circle cx="9" cy="15" r="1.4"/><circle cx="15" cy="9" r="1.4"/>`),
+  pie: SVG(`<path d="M12 3.2a8.8 8.8 0 1 0 8.8 8.8H12z"/><path d="M15.5 3.4A8.8 8.8 0 0 1 20.7 8.5H15.5z"/>`),
 };
 
 const PREVIEW_HTML = (key) => `
@@ -702,6 +704,32 @@ function renderDashboardShell(d) {
         </div>
       </div>
 
+      <div class="section-title"><b>Analyse de conversion</div>
+      <div class="card">
+        <div class="table-toolbar">
+          <input class="input" id="conv-search" type="search" placeholder="🔍 Rechercher dans l'analyse de conversion…" autocomplete="off" />
+          <div class="table-btns">
+            <span class="table-count" id="conv-count"></span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="conv-table">
+            <thead>
+              <tr>
+                <th>Création</th>
+                <th class="num" data-sort="views" title="Trier par vues">Vues ⇅</th>
+                <th class="num" data-sort="downloads" title="Trier par téléchargements">Téléch. ⇅</th>
+                <th class="num" data-sort="downloadRate" title="Trier par téléchargements/vues">Tél./vue ⇅</th>
+                <th class="num" data-sort="salesCount" title="Trier par ventes">Ventes ⇅</th>
+                <th class="num" data-sort="convRate" title="Trier par conversion vues→achat">Conv. ⇅</th>
+                <th class="num" data-sort="revPerSale" title="Trier par revenu moyen par vente">Revenu/vente ⇅</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="section-title"><b>Vos créations</div>
       <div class="card">
         <div class="table-toolbar">
@@ -783,13 +811,25 @@ function renderKpis(d) {
   const months = monthlySeries(d.revenue);
   const best = months.slice().sort((a, b) => b.cents - a.cents)[0];
   const growth = monthlyGrowth(months);
+  const engPts = d.engagement || [];
+  let fDelta = null;
+  if (engPts.length >= 2) {
+    const a = Number(engPts[engPts.length - 1].followers) || 0;
+    const b = Number(engPts[engPts.length - 2].followers) || 0;
+    if (a || b) fDelta = a - b;
+  }
+  const pps = d.priceShare || { paid: { count: 0, revenueCents: 0 }, free: { count: 0 } };
+  const paidRev = pps.paid.revenueCents || 0;
   const items = [
     { icon: "euro", label: "Revenus", value: money(t.revenueCents, d.user.currency, true), foot: `${num(t.sales)} vente(s) · ${pct(t.conversionRate)} de conversion` },
     { icon: "cart", label: "Panier moyen", value: money(t.sales ? Math.round(t.revenueCents / t.sales) : 0, d.user.currency, true), foot: t.sales ? `${pct(t.conversionRate)} de conversion` : "aucune vente" },
-    { icon: "download", label: "Téléchargements", value: num(t.downloads), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
-    { icon: "eye", label: "Vues", value: num(t.views), foot: `${num(t.creationsCount)} création(s)` },
+    { icon: "percent", label: "Taux de conversion", value: pct(t.conversionRate), foot: `${num(t.sales)} vente(s) / ${num(t.views)} vue(s)` },
+    { icon: "cart", label: "Revenu moyen / payante", value: t.paidCount ? money(Math.round(paidRev / t.paidCount), d.user.currency, true) : "—", foot: `${num(t.paidCount)} création(s) payante(s)` },
+    { icon: "pie", label: "Part payante du CA", value: t.revenueCents ? pct(paidRev / t.revenueCents) : "—", foot: `${money(paidRev, d.user.currency, true)} engrangés sur les payantes` },
+    { icon: "download", label: "Téléchargements", value: num(t.downloads), foot: `${pct(t.downloadRate)} téléch. / vue` },
+    { icon: "eye", label: "Vues", value: num(t.views), foot: `${num(t.avgViewsPerCreation)} vues/création en moyenne` },
     { icon: "heart", label: "Likes", value: num(t.likes), foot: `Revenu moyen : ${money(t.avgRevenuePerCreation, d.user.currency, true)}` },
-    { icon: "users", label: "Abonnés", value: num(d.user.followers), foot: d.user.bio ? "" : "Profil Cults3D" },
+    { icon: "users", label: "Abonnés", value: num(d.user.followers), foot: fDelta == null ? "suivi depuis la 1re synchronisation" : (fDelta >= 0 ? `▲ ${num(fDelta)} vs dernière synchronisation` : `▼ ${num(Math.abs(fDelta))} vs dernière synchronisation`) },
     { icon: "grid", label: "Catalogue", value: `${t.freeCount}<span style="color:var(--muted-2)"> / </span>${t.paidCount + t.freeCount}`, foot: "gratuit / total" },
   ];
   if (best) {
@@ -1049,6 +1089,96 @@ function bindSalesInteractions() {
 
   const exp = $("#btn-export-sales2");
   if (exp) exp.addEventListener("click", exportSalesCsv);
+}
+
+const convUI = { q: "", sort: "downloads", dir: -1 };
+
+function convRows(d) {
+  return (d.creations || []).map((c) => {
+    const views = Number(c.views) || 0;
+    const dls = Number(c.downloads) || 0;
+    const sales = Number(c.salesCount) || 0;
+    return {
+      id: c.id,
+      name: c.name,
+      url: c.url,
+      imageUrl: c.imageUrl,
+      views,
+      downloads: dls,
+      downloadRate: views ? dls / views : null,
+      salesCount: sales,
+      convRate: views ? sales / views : null,
+      revPerSale: sales ? Math.round((c.revenueCents || 0) / sales) : null,
+      revenueCents: c.revenueCents || 0,
+    };
+  });
+}
+
+function renderConv(d) {
+  d = d || state.data;
+  const tbody = $("#conv-table tbody");
+  if (!tbody) return;
+  const countEl = $("#conv-count");
+  const q = convUI.q.trim().toLowerCase();
+  const rows = convRows(d)
+    .filter((c) => !q || c.name.toLowerCase().indexOf(q) !== -1)
+    .sort((a, b) => {
+      const va = a[convUI.sort];
+      const vb = b[convUI.sort];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return (va - vb) * convUI.dir;
+    });
+  if (countEl) countEl.textContent = `${rows.length} création(s)`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><strong>${q ? "Aucune correspondance" : "Aucune donnée"}</strong>
+      ${q ? "Aucune création ne correspond à votre recherche." : "Les données apparaissent après une synchronisation."}</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((c) => `
+      <tr class="cre-row" data-id="${esc(c.id)}" title="Cliquer pour voir l'évolution">
+        <td>
+          <div class="cre-item">
+            ${c.imageUrl
+              ? `<img class="cre-thumb" src="${esc(c.imageUrl)}" loading="lazy" alt="" onerror="this.style.display='none'" />`
+              : `<div class="cre-thumb cre-thumb-ph">⬡</div>`}
+            <div>
+              <div class="cre-name">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener" class="cre-link" onclick="event.stopPropagation()">${esc(c.name)}</a>` : esc(c.name)}</div>
+            </div>
+          </div>
+        </td>
+        <td class="num">${num(c.views)}</td>
+        <td class="num">${num(c.downloads)}</td>
+        <td class="num">${c.downloadRate == null ? "—" : pct(c.downloadRate)}</td>
+        <td class="num">${num(c.salesCount)}</td>
+        <td class="num">${c.convRate == null ? "—" : `<strong class="${c.convRate >= (d.totals && d.totals.conversionRate || 0) ? "" : "muted"}">${pct(c.convRate)}</strong>`}</td>
+        <td class="num">${c.revPerSale == null ? "—" : `<strong>${esc(money(c.revPerSale, d.user.currency, true))}</strong>`}</td>
+      </tr>`)
+    .join("");
+  markSortHeader($("#conv-table"), convUI.sort, convUI.dir);
+}
+
+function bindConvInteractions(d) {
+  const search = $("#conv-search");
+  if (search) search.addEventListener("input", (e) => { convUI.q = e.target.value; renderConv(); });
+
+  $$("#conv-table th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.getAttribute("data-sort");
+      if (convUI.sort === key) convUI.dir = -convUI.dir;
+      else { convUI.sort = key; convUI.dir = -1; }
+      renderConv();
+    });
+  });
+
+  const tbody = $("#conv-table tbody");
+  if (tbody) tbody.addEventListener("click", (e) => {
+    if (e.target.closest("a.cre-link")) return;
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) openCreationDetail(tr.getAttribute("data-id"));
+  });
 }
 
 function exportCreationsCsv() {
@@ -1326,12 +1456,15 @@ function drawCharts(d) {
     emptyChart("chart-month", "Aucune vente pour l'instant", "Les barres mensuelles apparaîtront dès vos premières ventes.");
   } else {
     const opt = baseOption();
-    opt.grid = { left: 70, right: 26, top: 20, bottom: 34 };
+    opt.grid = { left: 70, right: 26, top: 30, bottom: 34 };
+    opt.legend = { data: ["Revenus", "Moyenne mobile (3 mois)"], textStyle: { color: cx.label, fontSize: 12.5 }, top: 2 };
     opt.tooltip.trigger = "axis";
     opt.tooltip.formatter = (ps) => {
       const p = ps[0];
       const item = months[p.dataIndex];
-      return `<strong>${esc(item.label)}</strong><br/>Revenus : ${money(item.cents, d.user.currency)}<br/>Ventes : ${item.count}`;
+      const sma = ps.find((x) => x.seriesName === "Moyenne mobile (3 mois)");
+      return `<strong>${esc(item.label)}</strong><br/>Revenus : ${money(item.cents, d.user.currency)}<br/>Ventes : ${item.count}` +
+        (sma != null ? `<br/>Moy. mobile 3 mois : ${money(sma.value, d.user.currency)}` : "");
     };
     opt.xAxis.data = months.map((m) => m.label);
     opt.yAxis = {
@@ -1339,6 +1472,11 @@ function drawCharts(d) {
       splitLine: { lineStyle: { color: cx.grid } },
       axisLabel: { color: cx.label, fontSize: 12, formatter: (v) => money(v, d.user.currency, true) },
     };
+    const sma = months.map((m, i) => {
+      const from = Math.max(0, i - 2);
+      const win = months.slice(from, i + 1);
+      return Math.round(win.reduce((s, x) => s + x.cents, 0) / win.length);
+    });
     opt.series = [
       {
         name: "Revenus",
@@ -1353,6 +1491,16 @@ function drawCharts(d) {
           fontSize: 11,
           formatter: (p) => money(p.value, d.user.currency, true),
         },
+      },
+      {
+        name: "Moyenne mobile (3 mois)",
+        type: "line",
+        smooth: true,
+        symbol: "none",
+        data: sma,
+        lineStyle: { width: 2.5, color: "#7c5cff", type: "dashed" },
+        itemStyle: { color: "#7c5cff" },
+        z: 3,
       },
     ];
     const c = makeChart("chart-month");
@@ -1636,6 +1784,8 @@ async function loadDashboard() {
   renderKpis(d);
   renderTable(d);
   bindTableInteractions(d);
+  renderConv(d);
+  bindConvInteractions(d);
   drawCharts(d);
   loadSales().catch(() => { /* le tableau des ventes est non bloquant */ });
 }
